@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------
+// USUARIOS Y AUTENTICACIÓN
+// ----------------------------------------------------
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company?
+}
+
+// ----------------------------------------------------
+// MI EMPRESA
+// ----------------------------------------------------
+model Company {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  rfc       String?  @unique
+  phone     String?
+  address   String?
+  logoUrl   String?  // Imagen de perfil de la empresa (base64)
+  points    Int      @default(0)
+  level     String   @default("Bronce")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activities CompanyActivity[]
+  evidences  Evidence[]
+}
+
+// ----------------------------------------------------
+// RUTA CESOFI (Catálogo de Actividades)
+// ----------------------------------------------------
+model Activity {
+  id              String   @id @default(uuid())
+  stepNumber      Int
+  title           String
+  description     String?
+  pointsReward    Int      @default(100)
+  requiresEvidence Boolean @default(true)
+
+  createdAt       DateTime @default(now())
+
+  companyProgress CompanyActivity[]
+  evidences       Evidence[]
+}
+
+enum ActivityStatus {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADO
+}
+
+model CompanyActivity {
+  id         String         @id @default(uuid())
+  companyId  String
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  activityId String
+  activity   Activity       @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  status     ActivityStatus @default(PENDIENTE)
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([companyId, activityId])
+}
+
+// ----------------------------------------------------
+// EVIDENCIAS
+// ----------------------------------------------------
+enum EvidenceStatus {
+  PENDIENTE
+  EN_REVISION
+  APROBADO
+  RECHAZADO
+}
+
+model Evidence {
+  id         String         @id @default(uuid())
+  companyId  String
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  activityId String
+  activity   Activity       @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  title      String
+  fileUrl    String?
+  fileName   String?
+  fileSize   String?
+  fileType   String?
+
+  status     EvidenceStatus @default(PENDIENTE)
+  feedback   String?
+
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
