@@ -12,11 +12,14 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { Header } from '../components/Header';
+
+const API_URL = 'http://localhost:4000';
 
 interface EvidenceItem {
   id: string;
@@ -26,6 +29,7 @@ interface EvidenceItem {
   fileName?: string;
   fileSize?: string;
   fileType?: string;
+  fileUrl?: string | null;
   date?: string;
   feedback?: string;
 }
@@ -49,60 +53,24 @@ export default function EvidenciasScreen() {
     size: string;
     uri: string;
     fileType: string;
+    mimeType: string;
+    webFile?: File;
   } | null>(null);
 
-  // Estado de las evidencias (Cargadas de la DB / Fallback)
-  const [evidences, setEvidences] = useState<EvidenceItem[]>([
-    {
-      id: 'EXP-2026-001',
-      title: 'Comprobante de Domicilio Fiscal',
-      activityName: '1. Plan de negocios',
-      status: 'APROBADO',
-      fileName: 'comprobante_domicilio_fiscal.pdf',
-      fileSize: '1.4 MB',
-      fileType: 'pdf',
-      date: '12 Ene 2026',
-      feedback: 'Documento completo, vigente y verificado correctamente por el comité.',
-    },
-    {
-      id: 'EXP-2026-002',
-      title: 'Constancia de Situación Fiscal (SAT)',
-      activityName: '3. Registro ante el SAT',
-      status: 'EN_REVISION',
-      fileName: 'CSF_Actualizada_2026.pdf',
-      fileSize: '850 KB',
-      fileType: 'pdf',
-      date: '15 Ene 2026',
-      feedback: 'El expediente se encuentra en proceso de dictaminación por el área jurídica.',
-    },
-    {
-      id: 'EXP-2026-003',
-      title: 'Constancia de Capacitación Inicial',
-      activityName: '4. Capacitaciones',
-      status: 'RECHAZADO',
-      fileName: 'constancia_borrosa.jpg',
-      fileSize: '2.4 MB',
-      fileType: 'jpg',
-      date: '10 Ene 2026',
-      feedback: 'Documento no legible. Favor de escanear nuevamente el documento original en alta resolución en formato PDF.',
-    },
-    {
-      id: 'EXP-2026-004',
-      title: 'Fotografía de la Fachada e Instalaciones',
-      activityName: '2. Presupuesto de inversión',
-      status: 'PENDIENTE',
-    },
-  ]);
+  // Evidencias reales cargadas desde el backend
+  const [evidences, setEvidences] = useState<EvidenceItem[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   // Cargar evidencias reales desde el backend
   const fetchEvidences = async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const token = await AsyncStorage.getItem('token');
 
       if (!token) return;
 
-      const response = await fetch('http://localhost:4000/api/evidence', {
+      const response = await fetch(`${API_URL}/api/evidence`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -110,22 +78,26 @@ export default function EvidenciasScreen() {
 
       const data = await response.json();
 
-      if (response.ok && data.evidences && data.evidences.length > 0) {
-        const mapped: EvidenceItem[] = data.evidences.map((e: any, index: number) => ({
-          id: e.id || `EXP-2026-00${index + 1}`,
-          title: e.title,
-          activityName: e.activity?.title || 'Actividad General',
-          status: e.status || 'PENDIENTE',
-          fileName: e.fileName || 'documento.pdf',
-          fileSize: e.fileSize || '1.2 MB',
-          fileType: e.fileType || 'pdf',
-          date: e.createdAt ? new Date(e.createdAt).toLocaleDateString() : 'Reciente',
-          feedback: e.feedback,
-        }));
-        setEvidences(mapped);
+      if (!response.ok) {
+        throw new Error(data.error || 'No se pudo consultar el expediente');
       }
+
+      const mapped: EvidenceItem[] = (data.evidences || []).map((e: any) => ({
+        id: e.id,
+        title: e.title,
+        activityName: e.activity?.title || 'Documento general',
+        status: e.status || 'EN_REVISION',
+        fileName: e.fileName,
+        fileSize: e.fileSize,
+        fileType: e.fileType,
+        fileUrl: e.fileUrl,
+        date: e.createdAt ? new Date(e.createdAt).toLocaleDateString() : 'Reciente',
+        feedback: e.feedback,
+      }));
+      setEvidences(mapped);
     } catch (error) {
       console.error('Error al cargar evidencias del backend:', error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -171,9 +143,9 @@ export default function EvidenciasScreen() {
     }
   };
 
-  const handleOpenModal = (item: EvidenceItem) => {
+  const handleOpenModal = (item: EvidenceItem | null) => {
     setSelectedItem(item);
-    setDocumentTitle(item.title);
+    setDocumentTitle(item?.title || '');
     setAcceptTerms(false);
     setPickedFile(null);
     setModalVisible(true);
@@ -189,13 +161,16 @@ export default function EvidenciasScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const ext = asset.name.split('.').pop()?.toLowerCase() || 'pdf';
-        const sizeMb = asset.size ? `${(asset.size / (1024 * 1024)).toFixed(2)} MB` : '1.5 MB';
+        const sizeMb = asset.size ? `${(asset.size / (1024 * 1024)).toFixed(2)} MB` : '';
 
         setPickedFile({
           name: asset.name,
           size: sizeMb,
           uri: asset.uri,
           fileType: ext,
+          mimeType: asset.mimeType || 'application/octet-stream',
+          // En web, expo-document-picker expone el File nativo del navegador aquí
+          webFile: asset.file,
         });
         setSelectedFileType(ext === 'png' || ext === 'jpg' || ext === 'jpeg' ? 'png' : 'pdf');
       }
@@ -211,6 +186,11 @@ export default function EvidenciasScreen() {
       return;
     }
 
+    if (!documentTitle.trim()) {
+      Alert.alert('Título requerido', 'Escribe un título para identificar el documento.');
+      return;
+    }
+
     if (!acceptTerms) {
       Alert.alert('Declaración obligatoria', 'Por favor confirma la declaración de veracidad legal antes de ingresar el documento.');
       return;
@@ -220,51 +200,52 @@ export default function EvidenciasScreen() {
       setUploading(true);
       const token = await AsyncStorage.getItem('token');
 
-      const uploadedName = pickedFile.name;
-      const uploadedSize = pickedFile.size;
-      const uploadedType = pickedFile.fileType;
-
-      if (token && selectedItem) {
-        await fetch('http://localhost:4000/api/evidence', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            title: selectedItem.title,
-            fileName: uploadedName,
-            fileSize: uploadedSize,
-            fileType: uploadedType,
-          }),
-        });
+      if (!token) {
+        Alert.alert('Sesión expirada', 'Vuelve a iniciar sesión para continuar.');
+        return;
       }
 
-      // Actualización en pantalla con el archivo real seleccionado
-      setEvidences((prev) =>
-        prev.map((e) =>
-          e.id === selectedItem?.id
-            ? {
-                ...e,
-                status: 'EN_REVISION',
-                fileName: uploadedName,
-                fileSize: uploadedSize,
-                fileType: uploadedType,
-                date: 'Hoy',
-                feedback: 'Documento oficial cargado exitosamente. En espera de dictamen por el comité.',
-              }
-            : e
-        )
-      );
+      const formData = new FormData();
+      formData.append('title', documentTitle.trim());
+
+      if (pickedFile.webFile) {
+        formData.append('file', pickedFile.webFile);
+      } else {
+        formData.append('file', {
+          uri: pickedFile.uri,
+          name: pickedFile.name,
+          type: pickedFile.mimeType,
+        } as any);
+      }
+
+      const response = await fetch(`${API_URL}/api/evidence`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'No se pudo ingresar el documento.');
+      }
 
       setModalVisible(false);
-      Alert.alert('¡Documento Cargado!', `El archivo "${uploadedName}" ha sido ingresado al Comité Oficial de Dictamen de CESOFI.`);
-    } catch (error) {
+      await fetchEvidences();
+      Alert.alert('¡Documento Cargado!', `El archivo "${pickedFile.name}" ha sido ingresado al Comité Oficial de Dictamen de CESOFI.`);
+    } catch (error: any) {
       console.error('Error al subir documento:', error);
-      Alert.alert('Error', 'No se pudo ingresar el documento.');
+      Alert.alert('Error', error.message || 'No se pudo ingresar el documento.');
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleViewDocument = (url?: string | null) => {
+    if (!url) return;
+    Linking.openURL(url).catch(() => Alert.alert('Error', 'No se pudo abrir el documento.'));
   };
 
   return (
@@ -374,11 +355,30 @@ export default function EvidenciasScreen() {
           </ScrollView>
         </View>
 
+        <TouchableOpacity style={styles.newEvidenceButton} onPress={() => handleOpenModal(null)}>
+          <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.newEvidenceButtonText}>Nueva Evidencia</Text>
+        </TouchableOpacity>
+
         {/* Lista de Fichas de Documentación */}
         {loading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color="#034123" />
             <Text style={styles.loadingText}>Consultando expediente digital...</Text>
+          </View>
+        ) : loadError ? (
+          <View style={styles.emptyBox}>
+            <Ionicons name="cloud-offline-outline" size={32} color="#94A3B8" />
+            <Text style={styles.emptyText}>
+              No se pudo conectar con el servidor. Verifica tu conexión e intenta de nuevo.
+            </Text>
+          </View>
+        ) : filteredEvidences.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Ionicons name="document-outline" size={32} color="#94A3B8" />
+            <Text style={styles.emptyText}>
+              Aún no has cargado documentos. Presiona "Nueva Evidencia" para comenzar tu expediente.
+            </Text>
           </View>
         ) : (
           <View style={styles.evidenceList}>
@@ -417,6 +417,16 @@ export default function EvidenciasScreen() {
                         <Text style={styles.fileMetaData}>
                           {item.fileName} • {item.fileSize} • Cargado: {item.date}
                         </Text>
+                      )}
+
+                      {item.fileUrl && (
+                        <TouchableOpacity
+                          style={styles.viewDocButton}
+                          onPress={() => handleViewDocument(item.fileUrl)}
+                        >
+                          <Ionicons name="eye-outline" size={14} color="#034123" />
+                          <Text style={styles.viewDocButtonText}>Ver documento</Text>
+                        </TouchableOpacity>
                       )}
                     </View>
                   </View>
@@ -489,10 +499,22 @@ export default function EvidenciasScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalSubtitle}>
-                Folio: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{selectedItem?.id}</Text>
-              </Text>
-              <Text style={styles.modalDocName}>{selectedItem?.title}</Text>
+              {selectedItem ? (
+                <>
+                  <Text style={styles.modalSubtitle}>
+                    Folio: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{selectedItem.id}</Text>
+                  </Text>
+                  <Text style={styles.modalDocName}>{selectedItem.title}</Text>
+                </>
+              ) : (
+                <TextInput
+                  style={styles.titleInput}
+                  placeholder="Título del documento (ej. Comprobante de domicilio)"
+                  placeholderTextColor="#94A3B8"
+                  value={documentTitle}
+                  onChangeText={setDocumentTitle}
+                />
+              )}
 
               {/* Zona Dropzone Estilizada e Interactiva */}
               <TouchableOpacity
@@ -893,6 +915,54 @@ const styles = StyleSheet.create({
     color: '#034123',
     marginBottom: 16,
   },
+  titleInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0F172A',
+    marginBottom: 16,
+  },
+  newEvidenceButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#034123',
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  newEvidenceButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  viewDocButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  viewDocButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#034123',
+    textDecorationLine: 'underline',
+  },
+  emptyBox: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+  },
   dropzone: {
     backgroundColor: '#F8FAFC',
     borderWidth: 2,
@@ -903,17 +973,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  activeDropzone: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#15803D',
+    borderStyle: 'solid',
+  },
   dropzoneTitle: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#0F172A',
     marginTop: 8,
   },
+  activeDropzoneTitle: {
+    color: '#15803D',
+  },
   dropzoneSubtitle: {
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
     marginBottom: 14,
+  },
+  pickButtonBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#034123',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  pickButtonBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   formatSelectorRow: {
     flexDirection: 'row',

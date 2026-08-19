@@ -2,8 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'super_clave_secreta_cesofi';
+import { JWT_SECRET } from '../lib/env';
 
 // REGISTRO DE USUARIO Y SU EMPRESA
 export const register = async (req: Request, res: Response): Promise<void> => {

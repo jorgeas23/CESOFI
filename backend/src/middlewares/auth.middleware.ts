@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'super_clave_secreta_cesofi';
+import { JWT_SECRET } from '../lib/env';
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;

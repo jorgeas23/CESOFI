@@ -20,6 +20,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/evidence', evidenceRoutes);
 
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err);
+  res.status(400).json({ error: err.message || 'Error inesperado en el servidor' });
+});
+
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {

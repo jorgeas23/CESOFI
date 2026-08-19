@@ -100,8 +100,8 @@ model Evidence {
   id         String         @id @default(uuid())
   companyId  String
   company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  activityId String
-  activity   Activity       @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  activityId String?
+  activity   Activity?      @relation(fields: [activityId], references: [id], onDelete: Cascade)
 
   title      String
   fileUrl    String?
