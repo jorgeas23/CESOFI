@@ -14,9 +14,12 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Header } from '../components/Header';
+import { API_URL } from '../config/api';
+import { clearSession } from '../utils/auth';
 
 interface CompanyData {
   id: string;
@@ -34,6 +37,7 @@ interface CompanyData {
 }
 
 export default function MiEmpresaScreen() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -71,11 +75,17 @@ export default function MiEmpresaScreen() {
         return;
       }
 
-      const response = await fetch('http://localhost:4000/api/company/me', {
+      const response = await fetch(`${API_URL}/api/company/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (response.status === 401 || response.status === 403) {
+        await clearSession();
+        router.replace('/login');
+        return;
+      }
 
       const data = await response.json();
 
@@ -150,7 +160,7 @@ export default function MiEmpresaScreen() {
       setSaving(true);
       const token = await AsyncStorage.getItem('token');
 
-      const response = await fetch('http://localhost:4000/api/company/me', {
+      const response = await fetch(`${API_URL}/api/company/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -204,7 +214,7 @@ export default function MiEmpresaScreen() {
       setChangingPassword(true);
       const token = await AsyncStorage.getItem('token');
 
-      const response = await fetch('http://localhost:4000/api/auth/change-password', {
+      const response = await fetch(`${API_URL}/api/auth/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

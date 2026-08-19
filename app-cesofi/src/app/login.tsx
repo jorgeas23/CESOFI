@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LoadingOverlay } from '../components/LoadingOverlay';
+import { API_URL } from '../config/api';
 
 const logoImg = require('../../assets/logo.png');
 
@@ -38,7 +39,7 @@ export default function LoginScreen() {
     setErrorMessage('');
 
     try {
-      const response = await fetch('http://localhost:4000/api/auth/login', {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

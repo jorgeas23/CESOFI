@@ -1,11 +1,23 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { register, login, changePassword } from '../controllers/auth.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
+import { validateBody } from '../middlewares/validate';
+import { registerSchema, loginSchema, changePasswordSchema } from '../schemas/auth.schema';
 
 const router = Router();
 
-router.post('/register', register);
-router.post('/login', login);
-router.put('/change-password', authenticateToken, changePassword);
+// Límite estricto para frenar intentos de fuerza bruta contra login/registro
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos. Intenta de nuevo en unos minutos.' },
+});
+
+router.post('/register', authLimiter, validateBody(registerSchema), register);
+router.post('/login', authLimiter, validateBody(loginSchema), login);
+router.put('/change-password', authenticateToken, validateBody(changePasswordSchema), changePassword);
 
 export default router;

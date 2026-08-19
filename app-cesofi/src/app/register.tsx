@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { API_URL } from '../config/api';
 
 const logoImg = require('../../assets/logo.png');
 
@@ -62,7 +63,7 @@ export default function RegisterScreen() {
     try {
       console.log('Enviando datos al backend:', payload);
 
-      const response = await fetch('http://localhost:4000/api/auth/register', {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

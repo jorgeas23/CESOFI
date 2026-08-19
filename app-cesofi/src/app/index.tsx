@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Header } from '../components/Header';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { useNavigateWithLoading } from '../hooks/useNavigateWithLoading';
+import { isTokenExpired, clearSession } from '../utils/auth';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -29,8 +30,9 @@ export default function HomeScreen() {
       try {
         const token = await AsyncStorage.getItem('token');
 
-        // SI NO HAY TOKEN -> Redirigir directamente al Login
-        if (!token) {
+        // SI NO HAY TOKEN O YA EXPIRÓ -> Redirigir directamente al Login
+        if (!token || isTokenExpired(token)) {
+          await clearSession();
           router.replace('/login');
           return;
         }

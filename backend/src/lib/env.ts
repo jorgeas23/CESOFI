@@ -6,6 +6,8 @@ function required(name: string): string {
   return value;
 }
 
+required('DATABASE_URL');
+
 export const JWT_SECRET = required('JWT_SECRET');
 export const SUPABASE_URL = required('SUPABASE_URL');
 export const SUPABASE_SECRET_KEY = required('SUPABASE_SECRET_KEY');

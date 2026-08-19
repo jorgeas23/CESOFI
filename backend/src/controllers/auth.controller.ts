@@ -9,11 +9,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, name, companyName, rfc } = req.body;
 
-    if (!email || !password || !name || !companyName) {
-      res.status(400).json({ error: 'Faltan campos obligatorios' });
-      return;
-    }
-
     // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
@@ -74,11 +69,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      res.status(400).json({ error: 'Correo y contraseña requeridos' });
-      return;
-    }
-
     const user = await prisma.user.findUnique({
       where: { email },
       include: { company: true },
@@ -121,16 +111,6 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     // El userId viene del middleware de autenticación
     const userId = (req as any).userId;
     const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      res.status(400).json({ error: 'Todos los campos son obligatorios' });
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
-      return;
-    }
 
     // Buscar el usuario en la BD
     const user = await prisma.user.findUnique({ where: { id: userId } });

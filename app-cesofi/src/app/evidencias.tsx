@@ -15,11 +15,12 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { Header } from '../components/Header';
-
-const API_URL = 'http://localhost:4000';
+import { API_URL } from '../config/api';
+import { clearSession } from '../utils/auth';
 
 interface EvidenceItem {
   id: string;
@@ -35,6 +36,7 @@ interface EvidenceItem {
 }
 
 export default function EvidenciasScreen() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,6 +77,12 @@ export default function EvidenciasScreen() {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (response.status === 401 || response.status === 403) {
+        await clearSession();
+        router.replace('/login');
+        return;
+      }
 
       const data = await response.json();
 

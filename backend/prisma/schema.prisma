@@ -84,6 +84,7 @@ model CompanyActivity {
   updatedAt  DateTime       @updatedAt
 
   @@unique([companyId, activityId])
+  @@index([companyId])
 }
 
 // ----------------------------------------------------
@@ -101,7 +102,7 @@ model Evidence {
   companyId  String
   company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   activityId String?
-  activity   Activity?      @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  activity   Activity?      @relation(fields: [activityId], references: [id], onDelete: SetNull)
 
   title      String
   fileUrl    String?
@@ -114,4 +115,8 @@ model Evidence {
 
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
+
+  @@index([companyId])
+  @@index([activityId])
+  @@index([status])
 }

@@ -7,6 +7,12 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hora
 
+const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+};
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -47,18 +53,29 @@ export const getEvidences = async (
       orderBy: { createdAt: 'desc' },
     });
 
-    // Cambiamos la ruta interna de storage por una URL firmada temporal para poder verla/descargarla
-    const evidencesWithUrls = await Promise.all(
-      evidences.map(async (evidence) => {
-        if (!evidence.fileUrl) return evidence;
+    // Cambiamos las rutas internas de storage por URLs firmadas temporales para poder verlas/descargarlas
+    const storagePaths = evidences
+      .map((evidence) => evidence.fileUrl)
+      .filter((path): path is string => Boolean(path));
 
-        const { data } = await supabaseAdmin.storage
-          .from(SUPABASE_EVIDENCE_BUCKET)
-          .createSignedUrl(evidence.fileUrl, SIGNED_URL_TTL_SECONDS);
+    const signedUrlByPath = new Map<string, string>();
 
-        return { ...evidence, fileUrl: data?.signedUrl ?? null };
-      })
-    );
+    if (storagePaths.length > 0) {
+      const { data: signedUrls } = await supabaseAdmin.storage
+        .from(SUPABASE_EVIDENCE_BUCKET)
+        .createSignedUrls(storagePaths, SIGNED_URL_TTL_SECONDS);
+
+      for (const entry of signedUrls || []) {
+        if (entry.path && entry.signedUrl) {
+          signedUrlByPath.set(entry.path, entry.signedUrl);
+        }
+      }
+    }
+
+    const evidencesWithUrls = evidences.map((evidence) => ({
+      ...evidence,
+      fileUrl: evidence.fileUrl ? signedUrlByPath.get(evidence.fileUrl) ?? null : evidence.fileUrl,
+    }));
 
     res.json({
       message: 'Evidencias obtenidas exitosamente',
@@ -85,11 +102,6 @@ export const createEvidence = async (
       return;
     }
 
-    if (!title || !title.trim()) {
-      res.status(400).json({ error: 'El título del documento es obligatorio' });
-      return;
-    }
-
     if (!file) {
       res.status(400).json({ error: 'Debes adjuntar un archivo (PDF, PNG o JPG)' });
       return;
@@ -104,7 +116,15 @@ export const createEvidence = async (
       return;
     }
 
-    const extension = file.originalname.split('.').pop()?.toLowerCase() || 'pdf';
+    if (activityId) {
+      const activity = await prisma.activity.findUnique({ where: { id: activityId } });
+      if (!activity) {
+        res.status(400).json({ error: 'La actividad indicada no existe' });
+        return;
+      }
+    }
+
+    const extension = EXTENSION_BY_MIME_TYPE[file.mimetype] || 'bin';
     const storagePath = `${company.id}/${randomUUID()}-${extension}`;
 
     const { error: uploadError } = await supabaseAdmin.storage
@@ -125,7 +145,7 @@ export const createEvidence = async (
       data: {
         companyId: company.id,
         activityId: activityId || undefined,
-        title: title.trim(),
+        title,
         fileUrl: storagePath,
         fileName: file.originalname,
         fileSize: formatFileSize(file.size),
