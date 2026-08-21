@@ -5,22 +5,15 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Header } from '../components/Header';
 
 export default function RutaScreen() {
   const router = useRouter();
-
-  // Función segura para regresar
-  const handleGoBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/');
-    }
-  };
+  const insets = useSafeAreaInsets();
 
   const steps = [
     {
@@ -34,15 +27,6 @@ export default function RutaScreen() {
     },
     {
       id: 2,
-      title: 'Diagnóstico empresarial',
-      description: 'Responde el diagnóstico para conocer el estado actual de tu empresa.',
-      status: 'COMPLETADA',
-      pts: '+150 pts',
-      iconType: 'ion',
-      iconName: 'clipboard-outline',
-    },
-    {
-      id: 3,
       title: 'Plan de negocios',
       description: 'Diseña el plan estratégico de tu negocio a corto y mediano plazo.',
       status: 'EN PROCESO',
@@ -51,7 +35,7 @@ export default function RutaScreen() {
       iconName: 'document-text-outline',
     },
     {
-      id: 4,
+      id: 3,
       title: 'Presupuesto de inversión',
       description: 'Calcula los requerimientos financieros de tu empresa.',
       status: 'PENDIENTE',
@@ -97,23 +81,13 @@ export default function RutaScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <Header />
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Botón de Regresar */}
-        <View style={styles.topNavigationRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleGoBack}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={20} color="#034123" />
-            <Text style={styles.backText}>Regresar</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Banner Informativo Superior */}
         <View style={styles.topBanner}>
           <Text style={styles.topTitle}>MI RUTA</Text>
@@ -267,18 +241,13 @@ export default function RutaScreen() {
       </ScrollView>
 
       {/* Tab Bar Inferior */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
         <TouchableOpacity
           style={styles.tabItem}
           onPress={() => router.replace('/')}
         >
           <Ionicons name="home-outline" size={22} color="#94A3B8" />
           <Text style={styles.tabLabel}>Inicio</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem}>
-          <Ionicons name="clipboard-outline" size={22} color="#94A3B8" />
-          <Text style={styles.tabLabel}>Mi diagnóstico</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem}>
@@ -310,24 +279,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-  },
-  topNavigationRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E0E7FF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 8,
-  },
-  backText: {
-    color: '#034123',
-    fontWeight: '600',
-    fontSize: 14,
   },
   topBanner: {
     backgroundColor: '#ECFDF5',

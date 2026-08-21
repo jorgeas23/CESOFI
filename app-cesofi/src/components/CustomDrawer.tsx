@@ -72,7 +72,6 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
   const menuItems = [
     { id: 'index', label: 'Dashboard', lib: 'ionicons', icon: 'home-outline', route: '/' },
     { id: 'mi-empresa', label: 'Mi empresa', lib: 'ionicons', icon: 'business-outline', route: '/mi-empresa' },
-    { id: 'diagnostico', label: 'Diagnóstico', lib: 'ionicons', icon: 'clipboard-outline', route: '/diagnostico' },
     { id: 'ruta', label: 'Mi ruta', lib: 'fa5', icon: 'route', route: '/ruta' },
     { id: 'evidencias', label: 'Evidencias', lib: 'ionicons', icon: 'folder-outline', route: '/evidencias' },
     { id: 'citas', label: 'Citas y Asesorías', lib: 'ionicons', icon: 'calendar-outline', route: '/citas' },
@@ -84,7 +83,6 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
   const moduleLabels: Record<string, string> = {
     '/': 'Cargando Dashboard...',
     '/mi-empresa': 'Cargando Mi Empresa...',
-    '/diagnostico': 'Cargando Diagnóstico...',
     '/ruta': 'Cargando Mi Ruta...',
     '/evidencias': 'Cargando Evidencias...',
     '/citas': 'Cargando Citas y Asesorías...',

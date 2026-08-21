@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -38,6 +39,7 @@ interface EvidenceItem {
 export default function EvidenciasScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('TODAS');
@@ -64,9 +66,13 @@ export default function EvidenciasScreen() {
   const [loadError, setLoadError] = useState(false);
 
   // Cargar evidencias reales desde el backend
-  const fetchEvidences = async () => {
+  const fetchEvidences = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setLoadError(false);
       const token = await AsyncStorage.getItem('token');
 
@@ -108,6 +114,7 @@ export default function EvidenciasScreen() {
       setLoadError(true);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -264,6 +271,9 @@ export default function EvidenciasScreen() {
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => fetchEvidences(true)} colors={['#034123']} tintColor="#034123" />
+        }
       >
         {/* Banner Hero de Expediente Oficial */}
         <View style={styles.heroBanner}>

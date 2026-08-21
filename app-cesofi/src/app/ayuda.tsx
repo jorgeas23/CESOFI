@@ -82,15 +82,15 @@ export default function AyudaScreen() {
   };
 
   const handleOpenWhatsApp = () => {
-    Linking.openURL('https://wa.me/529991234567?text=Hola,%20necesito%20soporte%20con%20mi%20cuenta%20CESOFI.');
+    Linking.openURL('https://wa.me/529818114419?text=Hola,%20necesito%20soporte%20con%20mi%20cuenta%20CESOFI.');
   };
 
   const handleOpenEmail = () => {
-    Linking.openURL('mailto:soporte@cesofi.gob.mx?subject=Consulta%20Plataforma%20CESOFI');
+    Linking.openURL('mailto:solucionesfinancieras@campeche.gob.mx?subject=Consulta%20Plataforma%20CESOFI');
   };
 
   const handleOpenPhone = () => {
-    Linking.openURL('tel:9991234567');
+    Linking.openURL('tel:9818114419');
   };
 
   const handleSendMessage = () => {

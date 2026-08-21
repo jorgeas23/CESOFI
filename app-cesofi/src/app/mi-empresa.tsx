@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -39,6 +40,7 @@ interface CompanyData {
 export default function MiEmpresaScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -65,9 +67,13 @@ export default function MiEmpresaScreen() {
   const [changingPassword, setChangingPassword] = useState(false);
 
   // Cargar datos de la empresa desde la API
-  const fetchCompanyProfile = async () => {
+  const fetchCompanyProfile = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       const token = await AsyncStorage.getItem('token');
 
       if (!token) {
@@ -117,6 +123,7 @@ export default function MiEmpresaScreen() {
       Alert.alert('Error', error.message || 'Error de conexión con el servidor.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -267,6 +274,15 @@ export default function MiEmpresaScreen() {
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => fetchCompanyProfile(true)}
+              enabled={!isEditing}
+              colors={['#034123']}
+              tintColor="#034123"
+            />
+          }
         >
           {loading ? (
             <View style={styles.loadingContainer}>

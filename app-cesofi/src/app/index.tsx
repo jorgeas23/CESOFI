@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -20,51 +21,61 @@ export default function HomeScreen() {
   const router = useRouter();
   const { loading, loadingMessage, navigate } = useNavigateWithLoading();
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('Usuario');
   const [userCompany, setUserCompany] = useState('Empresa CESOFI');
   const [userInitials, setUserInitials] = useState('U');
 
-  // Comprobar token e inicializar datos al abrir la app
-  useEffect(() => {
-    const checkAuthAndLoadData = async () => {
-      try {
-        const token = await AsyncStorage.getItem('token');
+  // Comprobar token y cargar datos del usuario (inicio y pull-to-refresh)
+  const checkAuthAndLoadData = async (isRefresh = false) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
 
-        // SI NO HAY TOKEN O YA EXPIRÓ -> Redirigir directamente al Login
-        if (!token || isTokenExpired(token)) {
-          await clearSession();
-          router.replace('/login');
-          return;
-        }
-
-        const storedName = await AsyncStorage.getItem('userName');
-        const storedCompany = await AsyncStorage.getItem('userCompany');
-
-        if (storedName) {
-          setUserName(storedName);
-
-          // Calcular iniciales (ej: "Ricardo Pérez" -> "RP")
-          const nameParts = storedName.trim().split(' ').filter(Boolean);
-          if (nameParts.length >= 2) {
-            setUserInitials(`${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase());
-          } else if (nameParts.length === 1) {
-            setUserInitials(nameParts[0].substring(0, 2).toUpperCase());
-          }
-        }
-
-        if (storedCompany) {
-          setUserCompany(storedCompany);
-        }
-      } catch (error) {
-        console.error('Error al verificar sesión:', error);
+      // SI NO HAY TOKEN O YA EXPIRÓ -> Redirigir directamente al Login
+      if (!token || isTokenExpired(token)) {
+        await clearSession();
         router.replace('/login');
-      } finally {
+        return;
+      }
+
+      const storedName = await AsyncStorage.getItem('userName');
+      const storedCompany = await AsyncStorage.getItem('userCompany');
+
+      if (storedName) {
+        setUserName(storedName);
+
+        // Calcular iniciales (ej: "Ricardo Pérez" -> "RP")
+        const nameParts = storedName.trim().split(' ').filter(Boolean);
+        if (nameParts.length >= 2) {
+          setUserInitials(`${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase());
+        } else if (nameParts.length === 1) {
+          setUserInitials(nameParts[0].substring(0, 2).toUpperCase());
+        }
+      }
+
+      if (storedCompany) {
+        setUserCompany(storedCompany);
+      }
+    } catch (error) {
+      console.error('Error al verificar sesión:', error);
+      router.replace('/login');
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
         setCheckingAuth(false);
       }
-    };
+    }
+  };
 
+  useEffect(() => {
     checkAuthAndLoadData();
   }, []);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    checkAuthAndLoadData(true);
+  };
 
   const quickActions = [
     {
@@ -157,12 +168,15 @@ export default function HomeScreen() {
       {/* Overlay de carga al navegar */}
       <LoadingOverlay visible={loading} message={loadingMessage} />
       {/* Header Principal */}
-      <Header userInitials={userInitials} notificationCount={2} />
+      <Header userInitials={userInitials} />
 
       <ScrollView
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#034123']} tintColor="#034123" />
+        }
       >
         {/* Banner Hero de Bienvenida */}
         <View style={styles.heroBanner}>
