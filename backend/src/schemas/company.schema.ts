@@ -7,4 +7,5 @@ export const updateCompanySchema = z.object({
   address: z.string().trim().optional().nullable(),
   contactName: z.string().trim().optional(),
   logoUrl: z.string().trim().optional().nullable(),
+  folioCesofi: z.string().trim().optional().nullable(),
 });

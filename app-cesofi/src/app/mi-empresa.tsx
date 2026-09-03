@@ -31,6 +31,7 @@ interface CompanyData {
   logoUrl: string | null;
   points: number;
   level: string;
+  folioCesofi: string | null;
   user?: {
     name: string;
     email: string;
@@ -55,6 +56,7 @@ export default function MiEmpresaScreen() {
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [folioCesofi, setFolioCesofi] = useState('');
 
   // Estados para cambio de contraseña
   const [showPasswordSection, setShowPasswordSection] = useState(false);
@@ -107,6 +109,7 @@ export default function MiEmpresaScreen() {
         setPhone(comp.phone || '');
         setAddress(comp.address || '');
         setLogoUri(comp.logoUrl || null);
+        setFolioCesofi(comp.folioCesofi || '');
         if (comp.user) {
           setContactName(comp.user.name || '');
           setEmail(comp.user.email || '');
@@ -180,6 +183,7 @@ export default function MiEmpresaScreen() {
           phone: phone.trim() ? phone.trim() : null,
           address: address.trim() ? address.trim() : null,
           logoUrl: logoUri,
+          folioCesofi: folioCesofi.trim() ? folioCesofi.trim() : null,
         }),
       });
 
@@ -483,6 +487,28 @@ export default function MiEmpresaScreen() {
                       <Text style={styles.dataDisplayText}>{address || 'Sin registrar'}</Text>
                     </View>
                   )}
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Folio de Atención CESOFI (SIDEC)</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={styles.input}
+                      value={folioCesofi}
+                      onChangeText={setFolioCesofi}
+                      placeholder="Ej. CESOFI-2026-0002"
+                      autoCapitalize="characters"
+                    />
+                  ) : (
+                    <View style={styles.dataDisplayBox}>
+                      <Ionicons name="pricetag-outline" size={20} color="#64748B" />
+                      <Text style={styles.dataDisplayText}>{folioCesofi || 'Sin vincular'}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.fieldHint}>
+                    Vincula el folio que te asignó tu asesor para que tu Ruta se llene automáticamente
+                    con tu plan de mejora, acciones críticas y capacitaciones recomendadas.
+                  </Text>
                 </View>
 
                 {/* Botón de Guardar si está en modo edición */}
@@ -876,6 +902,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: '#0F172A',
+  },
+  fieldHint: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 6,
+    lineHeight: 15,
   },
   saveButton: {
     flexDirection: 'row',

@@ -43,6 +43,10 @@ model Company {
   points    Int      @default(0)
   level     String   @default("Bronce")
 
+  // Folio de atención asignado por el sistema de Diagnóstico Financiero (CESOFI-SEDECO),
+  // usado para consultar su API externa y traer plan de mejora / recomendaciones / capacitaciones.
+  folioCesofi String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

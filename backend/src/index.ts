@@ -34,10 +34,12 @@ app.use('/api', rateLimit({
 import authRoutes from './routes/auth.routes';
 import companyRoutes from './routes/company.routes';
 import evidenceRoutes from './routes/evidence.routes';
+import rutaRoutes from './routes/ruta.routes';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/evidence', evidenceRoutes);
+app.use('/api/ruta', rutaRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
