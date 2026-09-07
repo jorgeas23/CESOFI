@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { JWT_SECRET } from '../lib/env';
 import { obtenerDiagnosticoPorFolio, DiagnosticoApiError } from '../lib/diagnosticoApi';
+import { mapCasoADiagnostico } from '../lib/mapCasoDiagnostico';
 
 // REGISTRO DE USUARIO Y SU EMPRESA
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -83,7 +84,11 @@ export const registerByFolio = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const diagnostico = await obtenerDiagnosticoPorFolio(folio);
+    // Igual que en getRuta: primero revisamos si ya nos llegó este folio por push
+    // (más rápido y no depende de que la API de jalar de SIDEC sea alcanzable).
+    const casoPush = await prisma.diagnosticoCaso.findUnique({ where: { folio } });
+    const diagnostico = casoPush ? mapCasoADiagnostico(casoPush) : await obtenerDiagnosticoPorFolio(folio);
+
     if (!diagnostico) {
       res.status(404).json({ error: `No existe una evaluación registrada para el folio ${folio}.` });
       return;
