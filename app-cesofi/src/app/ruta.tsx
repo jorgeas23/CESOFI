@@ -120,6 +120,9 @@ export default function RutaScreen() {
 
   const diagnostico = ruta?.diagnosticoIA;
   const plan = diagnostico?.planMejoraNivel;
+  // Solo capacitaciones de verdad aquí — las recomendaciones que no son cursos ya están
+  // cubiertas como pasos del plan de mejora, mostrarlas dos veces es redundante.
+  const capacitaciones = diagnostico?.recomendaciones?.filter((r) => r.esCapacitacion) || [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -333,11 +336,12 @@ export default function RutaScreen() {
               ))}
             </View>
 
-            {/* Recomendaciones y capacitaciones */}
-            {diagnostico.recomendaciones && diagnostico.recomendaciones.length > 0 && (
+            {/* Capacitaciones (las recomendaciones que no son cursos ya están cubiertas
+                como pasos del plan de mejora, arriba) */}
+            {capacitaciones.length > 0 && (
               <View style={styles.recCard}>
-                <Text style={styles.recTitle}>Recomendaciones y capacitaciones</Text>
-                {diagnostico.recomendaciones.map((rec) => (
+                <Text style={styles.recTitle}>Capacitaciones</Text>
+                {capacitaciones.map((rec) => (
                   <TouchableOpacity
                     key={rec.recomendacionId}
                     style={styles.recItem}
@@ -345,11 +349,7 @@ export default function RutaScreen() {
                     onPress={() => rec.enlace && Linking.openURL(rec.enlace).catch(() => {})}
                   >
                     <View style={styles.recIconBg}>
-                      <Ionicons
-                        name={rec.esCapacitacion ? 'school-outline' : 'ribbon-outline'}
-                        size={18}
-                        color="#034123"
-                      />
+                      <Ionicons name="school-outline" size={18} color="#034123" />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.recItemTitle}>{rec.titulo}</Text>
