@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,7 +14,18 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Header } from '../components/Header';
+import { API_URL } from '../config/api';
+
+interface MiMensaje {
+  id: string;
+  subject: string;
+  message: string;
+  status: 'PENDIENTE' | 'RESPONDIDO';
+  respuesta: string | null;
+  createdAt: string;
+}
 
 interface FAQItem {
   id: string;
@@ -31,6 +42,29 @@ export default function AyudaScreen() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [misMensajes, setMisMensajes] = useState<MiMensaje[]>([]);
+  const [loadingMensajes, setLoadingMensajes] = useState(true);
+
+  const fetchMisMensajes = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+      const response = await fetch(`${API_URL}/api/support`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      setMisMensajes(data.supportMessages || []);
+    } catch (error) {
+      console.error('Error al cargar mis mensajes de soporte:', error);
+    } finally {
+      setLoadingMensajes(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMisMensajes();
+  }, [fetchMisMensajes]);
 
   const faqs: FAQItem[] = [
     {
@@ -93,22 +127,45 @@ export default function AyudaScreen() {
     Linking.openURL('tel:9818114419');
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!subject.trim() || !message.trim()) {
       Alert.alert('Campos incompletos', 'Por favor ingresa el asunto y el mensaje.');
       return;
     }
 
-    setSending(true);
-    setTimeout(() => {
-      setSending(false);
+    try {
+      setSending(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Sesión expirada', 'Vuelve a iniciar sesión para continuar.');
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/api/support`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ subject: subject.trim(), message: message.trim() }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudo enviar tu consulta.');
+
       Alert.alert(
         '¡Mensaje Enviado!',
-        'Tu consulta ha sido enviada al equipo de soporte de CESOFI. Te responderemos por correo a la brevedad.'
+        'Tu consulta ha sido enviada al equipo de soporte de CESOFI. Te responderemos aquí mismo.'
       );
       setSubject('');
       setMessage('');
-    }, 1200);
+      await fetchMisMensajes();
+    } catch (error: any) {
+      console.error('Error al enviar mensaje de soporte:', error);
+      Alert.alert('Error', error.message || 'No se pudo enviar tu consulta.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -271,6 +328,32 @@ export default function AyudaScreen() {
               )}
             </TouchableOpacity>
           </View>
+
+          {/* Historial de mis consultas */}
+          {!loadingMensajes && misMensajes.length > 0 && (
+            <View style={styles.myMessagesSection}>
+              <Text style={styles.sectionHeading}>Mis Consultas</Text>
+              {misMensajes.map((m) => (
+                <View key={m.id} style={styles.myMessageCard}>
+                  <View style={styles.myMessageHeader}>
+                    <Text style={styles.myMessageSubject}>{m.subject}</Text>
+                    <View style={[styles.myMessageBadge, m.status === 'RESPONDIDO' && styles.myMessageBadgeDone]}>
+                      <Text style={[styles.myMessageBadgeText, m.status === 'RESPONDIDO' && { color: '#15803D' }]}>
+                        {m.status === 'RESPONDIDO' ? 'Respondido' : 'Pendiente'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.myMessageText}>{m.message}</Text>
+                  {m.respuesta && (
+                    <View style={styles.myMessageReplyBox}>
+                      <Text style={styles.myMessageReplyLabel}>Respuesta de CESOFI:</Text>
+                      <Text style={styles.myMessageReplyText}>{m.respuesta}</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -455,6 +538,66 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#475569',
     lineHeight: 19,
+  },
+  myMessagesSection: {
+    marginTop: 24,
+  },
+  myMessageCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  myMessageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  myMessageSubject: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    flex: 1,
+    marginRight: 8,
+  },
+  myMessageBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  myMessageBadgeDone: {
+    backgroundColor: '#DCFCE7',
+  },
+  myMessageBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#B45309',
+  },
+  myMessageText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+  },
+  myMessageReplyBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+  },
+  myMessageReplyLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#15803D',
+    marginBottom: 4,
+  },
+  myMessageReplyText: {
+    fontSize: 12,
+    color: '#166534',
+    lineHeight: 17,
   },
   contactFormCard: {
     backgroundColor: '#FFFFFF',

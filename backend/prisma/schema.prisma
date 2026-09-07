@@ -52,6 +52,32 @@ model Company {
 
   activities CompanyActivity[]
   evidences  Evidence[]
+  mensajesSoporte SupportMessage[]
+}
+
+// ----------------------------------------------------
+// CENTRO DE AYUDA: dudas que manda el empresario, que un admin responde
+// ----------------------------------------------------
+enum SupportMessageStatus {
+  PENDIENTE
+  RESPONDIDO
+}
+
+model SupportMessage {
+  id        String               @id @default(uuid())
+  companyId String
+  company   Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  subject   String
+  message   String
+  status    SupportMessageStatus @default(PENDIENTE)
+  respuesta String?
+
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([companyId])
+  @@index([status])
 }
 
 // ----------------------------------------------------

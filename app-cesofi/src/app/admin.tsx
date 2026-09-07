@@ -34,13 +34,32 @@ interface EvidenceAdmin {
   company: { id: string; name: string; folioCesofi: string | null; rfc: string | null };
 }
 
+interface SupportMessageAdmin {
+  id: string;
+  subject: string;
+  message: string;
+  status: 'PENDIENTE' | 'RESPONDIDO';
+  respuesta: string | null;
+  createdAt: string;
+  company: { id: string; name: string; folioCesofi: string | null };
+}
+
 export default function AdminScreen() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
+  const [view, setView] = useState<'EVIDENCIAS' | 'MENSAJES'>('EVIDENCIAS');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [evidences, setEvidences] = useState<EvidenceAdmin[]>([]);
   const [filter, setFilter] = useState<'EN_REVISION' | 'APROBADO' | 'RECHAZADO' | 'TODAS'>('EN_REVISION');
+
+  // Mensajes de soporte
+  const [supportMessages, setSupportMessages] = useState<SupportMessageAdmin[]>([]);
+  const [loadingSupport, setLoadingSupport] = useState(true);
+  const [supportFilter, setSupportFilter] = useState<'PENDIENTE' | 'RESPONDIDO' | 'TODOS'>('PENDIENTE');
+  const [replyTarget, setReplyTarget] = useState<SupportMessageAdmin | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   // Modal de dictamen
   const [selected, setSelected] = useState<EvidenceAdmin | null>(null);
@@ -92,6 +111,64 @@ export default function AdminScreen() {
   useEffect(() => {
     if (!checkingAccess) fetchEvidences(filter);
   }, [checkingAccess, filter, fetchEvidences]);
+
+  const fetchSupportMessages = useCallback(async (status: string, isRefresh = false) => {
+    try {
+      isRefresh ? setRefreshing(true) : setLoadingSupport(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/api/support/admin?status=${status}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los mensajes.');
+      setSupportMessages(data.supportMessages || []);
+    } catch (error: any) {
+      console.error('Error al cargar mensajes de soporte:', error);
+      Alert.alert('Error', error.message || 'Error de conexión con el servidor.');
+    } finally {
+      setLoadingSupport(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!checkingAccess) fetchSupportMessages(supportFilter);
+  }, [checkingAccess, supportFilter, fetchSupportMessages]);
+
+  const submitReply = async () => {
+    if (!replyTarget || !replyText.trim()) {
+      Alert.alert('Respuesta requerida', 'Escribe una respuesta antes de enviarla.');
+      return;
+    }
+
+    try {
+      setSubmittingReply(true);
+      const token = await AsyncStorage.getItem('token');
+
+      const response = await fetch(`${API_URL}/api/support/${replyTarget.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ respuesta: replyText.trim() }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudo enviar la respuesta.');
+
+      setReplyTarget(null);
+      setReplyText('');
+      await fetchSupportMessages(supportFilter);
+    } catch (error: any) {
+      console.error('Error al responder mensaje:', error);
+      Alert.alert('Error', error.message || 'No se pudo enviar la respuesta.');
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
 
   const openDecision = (evidence: EvidenceAdmin, tipo: 'APROBADO' | 'RECHAZADO') => {
     setSelected(evidence);
@@ -156,14 +233,36 @@ export default function AdminScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => fetchEvidences(filter, true)} colors={['#034123']} tintColor="#034123" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => (view === 'EVIDENCIAS' ? fetchEvidences(filter, true) : fetchSupportMessages(supportFilter, true))}
+            colors={['#034123']}
+            tintColor="#034123"
+          />
         }
       >
         <View style={styles.topBanner}>
-          <Text style={styles.topTitle}>DICTAMEN DE EVIDENCIAS</Text>
+          <Text style={styles.topTitle}>{view === 'EVIDENCIAS' ? 'DICTAMEN DE EVIDENCIAS' : 'MENSAJES DE SOPORTE'}</Text>
           <Ionicons name="shield-checkmark-outline" size={22} color="#034123" />
         </View>
 
+        <View style={styles.viewSwitchRow}>
+          <TouchableOpacity
+            style={[styles.viewSwitchTab, view === 'EVIDENCIAS' && styles.viewSwitchTabActive]}
+            onPress={() => setView('EVIDENCIAS')}
+          >
+            <Text style={[styles.viewSwitchText, view === 'EVIDENCIAS' && styles.viewSwitchTextActive]}>Evidencias</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewSwitchTab, view === 'MENSAJES' && styles.viewSwitchTabActive]}
+            onPress={() => setView('MENSAJES')}
+          >
+            <Text style={[styles.viewSwitchText, view === 'MENSAJES' && styles.viewSwitchTextActive]}>Mensajes de Soporte</Text>
+          </TouchableOpacity>
+        </View>
+
+        {view === 'EVIDENCIAS' ? (
+        <>
         <View style={styles.filterRow}>
           {(['EN_REVISION', 'APROBADO', 'RECHAZADO', 'TODAS'] as const).map((f) => (
             <TouchableOpacity
@@ -257,6 +356,71 @@ export default function AdminScreen() {
             ))}
           </View>
         )}
+        </>
+        ) : (
+        <>
+        <View style={styles.filterRow}>
+          {(['PENDIENTE', 'RESPONDIDO', 'TODOS'] as const).map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterChip, supportFilter === f && styles.activeFilterChip]}
+              onPress={() => setSupportFilter(f)}
+            >
+              <Text style={[styles.filterText, supportFilter === f && styles.activeFilterText]}>
+                {f === 'PENDIENTE' ? 'Pendientes' : f === 'RESPONDIDO' ? 'Respondidos' : 'Todos'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {loadingSupport ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#034123" />
+          </View>
+        ) : supportMessages.length === 0 ? (
+          <View style={styles.loadingBox}>
+            <Ionicons name="mail-open-outline" size={32} color="#94A3B8" />
+            <Text style={styles.emptyText}>No hay mensajes en este filtro.</Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {supportMessages.map((m) => (
+              <View key={m.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.companyName}>{m.company.name}</Text>
+                  {m.company.folioCesofi && <Text style={styles.folioText}>{m.company.folioCesofi}</Text>}
+                </View>
+
+                <Text style={styles.docTitle}>{m.subject}</Text>
+                <Text style={styles.metaText}>{new Date(m.createdAt).toLocaleDateString()}</Text>
+                <Text style={styles.messageBodyText}>{m.message}</Text>
+
+                {m.respuesta && (
+                  <View style={styles.feedbackBox}>
+                    <Text style={styles.feedbackLabel}>Tu respuesta:</Text>
+                    <Text style={styles.feedbackText}>{m.respuesta}</Text>
+                  </View>
+                )}
+
+                {m.status === 'PENDIENTE' ? (
+                  <TouchableOpacity
+                    style={styles.approveButton}
+                    onPress={() => { setReplyTarget(m); setReplyText(''); }}
+                  >
+                    <Ionicons name="arrow-undo-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.approveButtonText}>Responder</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.statusBadge, styles.approvedBadge]}>
+                    <Text style={[styles.statusBadgeText, { color: '#15803D' }]}>RESPONDIDO</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+        </>
+        )}
 
         <TouchableOpacity style={styles.logoutRow} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={18} color="#DC2626" />
@@ -304,6 +468,44 @@ export default function AdminScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de respuesta a mensaje de soporte */}
+      <Modal visible={!!replyTarget} animationType="slide" transparent onRequestClose={() => setReplyTarget(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Responder consulta</Text>
+            <Text style={styles.modalSubtitle}>{replyTarget?.subject} — {replyTarget?.company.name}</Text>
+            <Text style={styles.messageBodyText}>{replyTarget?.message}</Text>
+
+            <TextInput
+              style={styles.feedbackInput}
+              placeholder="Escribe tu respuesta..."
+              placeholderTextColor="#94A3B8"
+              value={replyText}
+              onChangeText={setReplyText}
+              multiline
+              numberOfLines={4}
+            />
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setReplyTarget(null)} disabled={submittingReply}>
+                <Text style={styles.cancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmButton, { opacity: submittingReply ? 0.7 : 1 }]}
+                onPress={submitReply}
+                disabled={submittingReply}
+              >
+                {submittingReply ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.confirmButtonText}>Enviar Respuesta</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -323,6 +525,43 @@ const styles = StyleSheet.create({
     borderColor: '#A7F3D0',
   },
   topTitle: { fontSize: 16, fontWeight: 'bold', color: '#034123', letterSpacing: 0.5 },
+  viewSwitchRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 16,
+  },
+  viewSwitchTab: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  viewSwitchTabActive: {
+    backgroundColor: '#034123',
+  },
+  viewSwitchText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  viewSwitchTextActive: {
+    color: '#FFFFFF',
+  },
+  messageBodyText: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 17,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  feedbackLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#475569',
+    marginBottom: 4,
+  },
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
   filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: '#E2E8F0' },
   activeFilterChip: { backgroundColor: '#034123' },
