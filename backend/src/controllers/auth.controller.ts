@@ -52,6 +52,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
+        role: newUser.role,
         company: newUser.company,
       },
     });
@@ -123,6 +124,7 @@ export const registerByFolio = async (req: Request, res: Response): Promise<void
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
+        role: newUser.role,
         company: newUser.company,
       },
     });
@@ -174,6 +176,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         company: user.company,
       },
     });

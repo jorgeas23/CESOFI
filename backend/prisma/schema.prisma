@@ -114,6 +114,11 @@ model Evidence {
   fileSize   String?
   fileType   String?
 
+  // Id del paso de la Ruta CESOFI (viene de SIDEC por push, o de nuestro catálogo por nivel)
+  // al que corresponde esta evidencia. No es una FK real porque los pasos no viven en esta
+  // base — son dinámicos — pero es lo que nos deja marcar un paso como cumplido.
+  pasoId     String?
+
   status     EvidenceStatus @default(PENDIENTE)
   feedback   String?
 
@@ -123,6 +128,7 @@ model Evidence {
   @@index([companyId])
   @@index([activityId])
   @@index([status])
+  @@index([pasoId])
 }
 
 // ----------------------------------------------------

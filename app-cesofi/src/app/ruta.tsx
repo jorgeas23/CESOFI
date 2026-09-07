@@ -8,16 +8,20 @@ import {
   ActivityIndicator,
   Linking,
   RefreshControl,
+  Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as DocumentPicker from 'expo-document-picker';
 import { Header } from '../components/Header';
 import { API_URL } from '../config/api';
 import { clearSession } from '../utils/auth';
 
 interface Paso {
+  id?: string;
   orden: number;
   titulo: string;
   descripcion: string;
@@ -25,6 +29,15 @@ interface Paso {
   impactoEnPuntaje?: string;
   recursos: string;
   plazo: string;
+}
+
+interface EvidenciaPaso {
+  id: string;
+  pasoId: string | null;
+  status: 'PENDIENTE' | 'EN_REVISION' | 'APROBADO' | 'RECHAZADO';
+  feedback: string | null;
+  fileUrl: string | null;
+  createdAt: string;
 }
 
 interface Recomendacion {
@@ -75,6 +88,102 @@ export default function RutaScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ruta, setRuta] = useState<RutaResponse | null>(null);
+  const [evidencias, setEvidencias] = useState<EvidenciaPaso[]>([]);
+
+  // Subida de evidencia ligada a un paso
+  const [uploadPaso, setUploadPaso] = useState<Paso | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [pickedFile, setPickedFile] = useState<{
+    name: string;
+    uri: string;
+    mimeType: string;
+    webFile?: File;
+  } | null>(null);
+
+  const fetchEvidencias = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+      const response = await fetch(`${API_URL}/api/evidence`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      setEvidencias(data.evidences || []);
+    } catch (err) {
+      console.error('Error al cargar evidencias de la ruta:', err);
+    }
+  }, []);
+
+  // Última evidencia subida para un paso (las evidencias vienen ordenadas por fecha desc)
+  const evidenciaDePaso = (pasoId?: string) =>
+    pasoId ? evidencias.find((e) => e.pasoId === pasoId) : undefined;
+
+  const handlePickFile = async (paso: Paso) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setPickedFile({
+          name: asset.name,
+          uri: asset.uri,
+          mimeType: asset.mimeType || 'application/octet-stream',
+          webFile: asset.file,
+        });
+        setUploadPaso(paso);
+      }
+    } catch (err) {
+      console.error('Error al seleccionar archivo:', err);
+      Alert.alert('Error', 'No se pudo abrir el explorador de archivos.');
+    }
+  };
+
+  const handleUploadForPaso = async () => {
+    if (!uploadPaso || !pickedFile) return;
+
+    try {
+      setUploading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const formData = new FormData();
+      formData.append('title', uploadPaso.titulo);
+      formData.append('pasoId', uploadPaso.id || '');
+
+      if (pickedFile.webFile) {
+        formData.append('file', pickedFile.webFile);
+      } else {
+        formData.append('file', {
+          uri: pickedFile.uri,
+          name: pickedFile.name,
+          type: pickedFile.mimeType,
+        } as any);
+      }
+
+      const response = await fetch(`${API_URL}/api/evidence`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudo subir el documento.');
+
+      setUploadPaso(null);
+      setPickedFile(null);
+      await fetchEvidencias();
+      Alert.alert('¡Listo!', 'Tu documento fue ingresado al proceso de dictamen.');
+    } catch (err: any) {
+      console.error('Error al subir evidencia del paso:', err);
+      Alert.alert('Error', err.message || 'No se pudo subir el documento.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const fetchRuta = useCallback(async (isRefresh = false) => {
     try {
@@ -116,7 +225,8 @@ export default function RutaScreen() {
 
   useEffect(() => {
     fetchRuta();
-  }, [fetchRuta]);
+    fetchEvidencias();
+  }, [fetchRuta, fetchEvidencias]);
 
   const diagnostico = ruta?.diagnosticoIA;
   const plan = diagnostico?.planMejoraNivel;
@@ -302,38 +412,85 @@ export default function RutaScreen() {
             <View style={styles.timelineContainer}>
               <View style={styles.verticalLine} />
 
-              {plan.pasos.map((paso) => (
-                <View key={paso.orden} style={styles.stepRow}>
-                  <View style={styles.nodeCircle}>
-                    <View style={styles.nodeInnerCircle}>
-                      <Text style={styles.nodeOrderText}>{paso.orden}</Text>
+              {plan.pasos.map((paso) => {
+                const evidencia = evidenciaDePaso(paso.id);
+                const status = evidencia?.status;
+                const nodeColor =
+                  status === 'APROBADO' ? '#15803D' : status === 'RECHAZADO' ? '#DC2626' : status === 'EN_REVISION' ? '#D97706' : '#034123';
+
+                return (
+                  <View key={paso.orden} style={styles.stepRow}>
+                    <View style={[styles.nodeCircle, { borderColor: nodeColor }]}>
+                      <View style={[styles.nodeInnerCircle, { backgroundColor: nodeColor }]}>
+                        {status === 'APROBADO' ? (
+                          <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.nodeOrderText}>{paso.orden}</Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
 
-                  <View style={styles.stepCard}>
-                    <Text style={styles.cardTitle}>{paso.titulo}</Text>
-                    <Text style={styles.cardDescription}>{paso.descripcion}</Text>
+                    <View style={styles.stepCard}>
+                      <Text style={styles.cardTitle}>{paso.titulo}</Text>
+                      <Text style={styles.cardDescription}>{paso.descripcion}</Text>
 
-                    <View style={styles.tagsRow}>
-                      <View style={styles.tag}>
-                        <Text style={styles.tagText}>{paso.area}</Text>
+                      <View style={styles.tagsRow}>
+                        <View style={styles.tag}>
+                          <Text style={styles.tagText}>{paso.area}</Text>
+                        </View>
+                        <View style={styles.tag}>
+                          <Text style={styles.tagText}>{paso.plazo}</Text>
+                        </View>
+                        {paso.impactoEnPuntaje && (
+                          <View style={[styles.tag, styles.tagImpact]}>
+                            <Text style={[styles.tagText, { color: '#15803D' }]}>{paso.impactoEnPuntaje}</Text>
+                          </View>
+                        )}
                       </View>
-                      <View style={styles.tag}>
-                        <Text style={styles.tagText}>{paso.plazo}</Text>
-                      </View>
-                      {paso.impactoEnPuntaje && (
-                        <View style={[styles.tag, styles.tagImpact]}>
-                          <Text style={[styles.tagText, { color: '#15803D' }]}>{paso.impactoEnPuntaje}</Text>
+
+                      {paso.recursos && (
+                        <Text style={styles.recursosText}>Recursos: {paso.recursos}</Text>
+                      )}
+
+                      {status === 'RECHAZADO' && evidencia?.feedback && (
+                        <View style={styles.stepFeedbackBox}>
+                          <Ionicons name="alert-circle-outline" size={14} color="#DC2626" />
+                          <Text style={styles.stepFeedbackText}>{evidencia.feedback}</Text>
                         </View>
                       )}
-                    </View>
 
-                    {paso.recursos && (
-                      <Text style={styles.recursosText}>Recursos: {paso.recursos}</Text>
-                    )}
+                      <View style={styles.stepFooterRow}>
+                        {status === 'APROBADO' ? (
+                          <View style={styles.stepStatusBadge}>
+                            <Ionicons name="checkmark-circle" size={14} color="#15803D" />
+                            <Text style={[styles.stepStatusText, { color: '#15803D' }]}>Completado</Text>
+                          </View>
+                        ) : status === 'EN_REVISION' ? (
+                          <View style={styles.stepStatusBadge}>
+                            <Ionicons name="time-outline" size={14} color="#D97706" />
+                            <Text style={[styles.stepStatusText, { color: '#D97706' }]}>En revisión</Text>
+                          </View>
+                        ) : null}
+
+                        {evidencia?.fileUrl && (
+                          <TouchableOpacity onPress={() => Linking.openURL(evidencia.fileUrl!).catch(() => {})}>
+                            <Text style={styles.stepLinkText}>Ver documento</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {paso.id && status !== 'APROBADO' && status !== 'EN_REVISION' && (
+                          <TouchableOpacity style={styles.stepUploadButton} onPress={() => handlePickFile(paso)}>
+                            <Ionicons name="cloud-upload-outline" size={14} color="#FFFFFF" />
+                            <Text style={styles.stepUploadButtonText}>
+                              {status === 'RECHAZADO' ? 'Subir corrección' : 'Subir evidencia'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
 
             {/* Capacitaciones (las recomendaciones que no son cursos ya están cubiertas
@@ -384,6 +541,42 @@ export default function RutaScreen() {
           <Text style={styles.tabLabel}>Evidencias</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Confirmar subida de evidencia para un paso */}
+      <Modal visible={!!uploadPaso} animationType="slide" transparent onRequestClose={() => setUploadPaso(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Subir evidencia</Text>
+            <Text style={styles.modalSubtitle}>{uploadPaso?.titulo}</Text>
+
+            <View style={styles.filePreviewBox}>
+              <Ionicons name="document-text-outline" size={22} color="#034123" />
+              <Text style={styles.filePreviewText} numberOfLines={1}>{pickedFile?.name}</Text>
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => { setUploadPaso(null); setPickedFile(null); }}
+                disabled={uploading}
+              >
+                <Text style={styles.cancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmButton, { opacity: uploading ? 0.7 : 1 }]}
+                onPress={handleUploadForPaso}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.confirmButtonText}>Ingresar Documento</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -767,6 +960,126 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94A3B8',
     fontStyle: 'italic',
+  },
+  stepFeedbackBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+  },
+  stepFeedbackText: {
+    fontSize: 11,
+    color: '#991B1B',
+    flex: 1,
+    lineHeight: 15,
+  },
+  stepFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  stepStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  stepStatusText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  stepLinkText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#034123',
+    textDecorationLine: 'underline',
+  },
+  stepUploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#034123',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 'auto',
+  },
+  stepUploadButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#034123',
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  filePreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20,
+  },
+  filePreviewText: {
+    fontSize: 13,
+    color: '#0F172A',
+    flex: 1,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+  },
+  cancelButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  confirmButton: {
+    flex: 2,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#034123',
+  },
+  confirmButtonText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   recCard: {
     backgroundColor: '#FFFFFF',

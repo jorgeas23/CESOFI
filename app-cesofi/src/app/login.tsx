@@ -64,6 +64,9 @@ export default function LoginScreen() {
       if (data.user && data.user.company && data.user.company.name) {
         await AsyncStorage.setItem('userCompany', data.user.company.name);
       }
+      if (data.user && data.user.role) {
+        await AsyncStorage.setItem('userRole', data.user.role);
+      }
 
       // Mostrar mensaje de éxito brevemente antes de navegar
       setLoadingMessage('¡Bienvenido! Cargando tu cuenta...');

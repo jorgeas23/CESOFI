@@ -36,6 +36,7 @@ export interface DiagnosticoRespuesta {
       nivelObjetivo: number;
       tiempoEstimado: string;
       pasos: Array<{
+        id?: string;
         orden: number;
         titulo: string;
         descripcion: string;

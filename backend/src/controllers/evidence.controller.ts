@@ -18,6 +18,26 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+// Sustituye las rutas internas de storage por URLs firmadas temporales, en lote.
+async function conUrlsFirmadas<T extends { fileUrl: string | null }>(evidences: T[]): Promise<T[]> {
+  const rutas = evidences.map((e) => e.fileUrl).filter((p): p is string => Boolean(p));
+  if (rutas.length === 0) return evidences;
+
+  const { data: firmadas } = await supabaseAdmin.storage
+    .from(SUPABASE_EVIDENCE_BUCKET)
+    .createSignedUrls(rutas, SIGNED_URL_TTL_SECONDS);
+
+  const urlPorRuta = new Map<string, string>();
+  for (const entry of firmadas || []) {
+    if (entry.path && entry.signedUrl) urlPorRuta.set(entry.path, entry.signedUrl);
+  }
+
+  return evidences.map((e) => ({
+    ...e,
+    fileUrl: e.fileUrl ? urlPorRuta.get(e.fileUrl) ?? null : e.fileUrl,
+  }));
+}
+
 // 1. Obtener todas las evidencias de la empresa del usuario
 export const getEvidences = async (
   req: AuthenticatedRequest,
@@ -53,29 +73,7 @@ export const getEvidences = async (
       orderBy: { createdAt: 'desc' },
     });
 
-    // Cambiamos las rutas internas de storage por URLs firmadas temporales para poder verlas/descargarlas
-    const storagePaths = evidences
-      .map((evidence) => evidence.fileUrl)
-      .filter((path): path is string => Boolean(path));
-
-    const signedUrlByPath = new Map<string, string>();
-
-    if (storagePaths.length > 0) {
-      const { data: signedUrls } = await supabaseAdmin.storage
-        .from(SUPABASE_EVIDENCE_BUCKET)
-        .createSignedUrls(storagePaths, SIGNED_URL_TTL_SECONDS);
-
-      for (const entry of signedUrls || []) {
-        if (entry.path && entry.signedUrl) {
-          signedUrlByPath.set(entry.path, entry.signedUrl);
-        }
-      }
-    }
-
-    const evidencesWithUrls = evidences.map((evidence) => ({
-      ...evidence,
-      fileUrl: evidence.fileUrl ? signedUrlByPath.get(evidence.fileUrl) ?? null : evidence.fileUrl,
-    }));
+    const evidencesWithUrls = await conUrlsFirmadas(evidences);
 
     res.json({
       message: 'Evidencias obtenidas exitosamente',
@@ -94,7 +92,7 @@ export const createEvidence = async (
 ): Promise<void> => {
   try {
     const userId = req.userId;
-    const { title, activityId } = req.body;
+    const { title, activityId, pasoId } = req.body;
     const file = req.file;
 
     if (!userId) {
@@ -145,7 +143,8 @@ export const createEvidence = async (
       data: {
         companyId: company.id,
         activityId: activityId || undefined,
-        title,
+        pasoId: pasoId || undefined,
+        title: title.trim(),
         fileUrl: storagePath,
         fileName: file.originalname,
         fileSize: formatFileSize(file.size),
@@ -165,5 +164,61 @@ export const createEvidence = async (
   } catch (error) {
     console.error('Error al registrar evidencia:', error);
     res.status(500).json({ error: 'Error interno al procesar la evidencia' });
+  }
+};
+
+// 3. [ADMIN] Listar evidencias de todas las empresas, para dictaminar (por defecto, las
+//    que están EN_REVISION — las que de verdad necesitan que alguien las revise).
+export const listEvidencesForAdmin = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const statusFiltro = typeof req.query.status === 'string' ? req.query.status : 'EN_REVISION';
+
+    const evidences = await prisma.evidence.findMany({
+      where: statusFiltro === 'TODAS' ? {} : { status: statusFiltro as any },
+      include: {
+        company: {
+          select: { id: true, name: true, folioCesofi: true, rfc: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const evidencesWithUrls = await conUrlsFirmadas(evidences);
+
+    res.json({ message: 'Evidencias obtenidas exitosamente', evidences: evidencesWithUrls });
+  } catch (error) {
+    console.error('Error al listar evidencias para admin:', error);
+    res.status(500).json({ error: 'Error interno al consultar evidencias' });
+  }
+};
+
+// 4. [ADMIN] Aprobar o rechazar una evidencia — esto es lo que hace que un paso de la Ruta
+//    se vea como cumplido (o rechazado) del lado del empresario.
+export const reviewEvidence = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    const { status, feedback } = req.body;
+
+    const evidence = await prisma.evidence.findUnique({ where: { id } });
+    if (!evidence) {
+      res.status(404).json({ error: 'Evidencia no encontrada' });
+      return;
+    }
+
+    const actualizada = await prisma.evidence.update({
+      where: { id },
+      data: { status, feedback: feedback || null },
+    });
+
+    res.json({ message: 'Evidencia dictaminada exitosamente', evidence: actualizada });
+  } catch (error) {
+    console.error('Error al dictaminar evidencia:', error);
+    res.status(500).json({ error: 'Error interno al dictaminar la evidencia' });
   }
 };

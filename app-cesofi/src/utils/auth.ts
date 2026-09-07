@@ -23,5 +23,5 @@ export function isTokenExpired(token: string): boolean {
 }
 
 export async function clearSession(): Promise<void> {
-  await AsyncStorage.multiRemove(['token', 'userName', 'userCompany']);
+  await AsyncStorage.multiRemove(['token', 'userName', 'userCompany', 'userRole']);
 }

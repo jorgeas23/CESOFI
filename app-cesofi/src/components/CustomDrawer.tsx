@@ -37,6 +37,7 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
   const [userName, setUserName] = useState<string>(propUser?.name || '');
   const [userCompany, setUserCompany] = useState<string>(propUser?.company || '');
   const [userInitials, setUserInitials] = useState<string>(propInitials || '');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -44,8 +45,10 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
         try {
           const storedName = propUser?.name || (await AsyncStorage.getItem('userName')) || 'Usuario';
           const storedCompany = propUser?.company || (await AsyncStorage.getItem('userCompany')) || 'Empresa CESOFI';
+          const storedRole = await AsyncStorage.getItem('userRole');
           setUserName(storedName);
           setUserCompany(storedCompany);
+          setIsAdmin(storedRole === 'ADMIN');
 
           if (propInitials) {
             setUserInitials(propInitials);
@@ -80,6 +83,16 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
     { id: 'ayuda', label: 'Ayuda', lib: 'ionicons', icon: 'help-circle-outline', route: '/ayuda' },
   ];
 
+  if (isAdmin) {
+    menuItems.push({
+      id: 'admin',
+      label: 'Administración',
+      lib: 'ionicons',
+      icon: 'shield-checkmark-outline',
+      route: '/admin',
+    });
+  }
+
   const moduleLabels: Record<string, string> = {
     '/': 'Cargando Dashboard...',
     '/mi-empresa': 'Cargando Mi Empresa...',
@@ -89,6 +102,7 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
     '/capacitaciones': 'Cargando Capacitaciones...',
     '/logros': 'Cargando Mis Logros...',
     '/ayuda': 'Cargando Ayuda...',
+    '/admin': 'Cargando Administración...',
   };
 
   const handleNavigation = (route: string) => {
@@ -99,7 +113,7 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.multiRemove(['token', 'userName', 'userCompany']);
+      await AsyncStorage.multiRemove(['token', 'userName', 'userCompany', 'userRole']);
     } catch (e) {
       console.error('Error al limpiar storage en logout:', e);
     }

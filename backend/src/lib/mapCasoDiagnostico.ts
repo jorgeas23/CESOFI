@@ -63,6 +63,7 @@ export function mapCasoADiagnostico(caso: DiagnosticoCaso): DiagnosticoRespuesta
         nivelObjetivo: plan.nivelObjetivo ?? extraerNivel(resultado.nivel) + 1,
         tiempoEstimado: plan.tiempoEstimado || '',
         pasos: (plan.pasos || []).map((p: any) => ({
+          id: p.id,
           orden: p.orden,
           titulo: p.titulo,
           descripcion: p.descripcion,

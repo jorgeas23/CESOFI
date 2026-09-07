@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { getEvidences, createEvidence } from '../controllers/evidence.controller';
+import { getEvidences, createEvidence, listEvidencesForAdmin, reviewEvidence } from '../controllers/evidence.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
+import { requireAdmin } from '../middlewares/requireAdmin.middleware';
 import { validateBody } from '../middlewares/validate';
-import { createEvidenceSchema } from '../schemas/evidence.schema';
+import { createEvidenceSchema, reviewEvidenceSchema } from '../schemas/evidence.schema';
 
 const ALLOWED_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 
@@ -26,5 +27,11 @@ router.get('/', authenticateToken, getEvidences);
 
 // POST /api/evidence  -> Registrar una nueva evidencia (multipart/form-data, campo "file")
 router.post('/', authenticateToken, upload.single('file'), validateBody(createEvidenceSchema), createEvidence);
+
+// GET   /api/evidence/admin -> [ADMIN] Listar evidencias de todas las empresas para dictaminar
+router.get('/admin', authenticateToken, requireAdmin, listEvidencesForAdmin);
+
+// PATCH /api/evidence/:id -> [ADMIN] Aprobar o rechazar una evidencia
+router.patch('/:id', authenticateToken, requireAdmin, validateBody(reviewEvidenceSchema), reviewEvidence);
 
 export default router;

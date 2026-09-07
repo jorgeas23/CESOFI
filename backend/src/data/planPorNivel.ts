@@ -17,6 +17,7 @@ export interface RecomendacionCesofi {
 }
 
 export interface PasoCesofi {
+  id: string;
   orden: number;
   titulo: string;
   descripcion: string;
@@ -44,6 +45,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
     ],
     pasos: [
       {
+        id: 'nivel1-paso1',
         orden: 1,
         titulo: 'Control Básico de Caja',
         descripcion: 'Implementar una bitácora simple de ingresos y egresos diarios del negocio.',
@@ -53,6 +55,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
         plazo: 'Mes 1-2',
       },
       {
+        id: 'nivel1-paso2',
         orden: 2,
         titulo: 'Regularización Fiscal Inicial',
         descripcion: 'Tramitar o actualizar la Constancia de Situación Fiscal ante el SAT.',
@@ -83,6 +86,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
     ],
     pasos: [
       {
+        id: 'nivel2-paso1',
         orden: 1,
         titulo: 'Control Básico de Inventarios y Caja',
         descripcion: 'Implementar bitácora de entradas y salidas de mercancía y conciliar saldo al final de cada turno.',
@@ -92,6 +96,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
         plazo: 'Mes 1-2',
       },
       {
+        id: 'nivel2-paso2',
         orden: 2,
         titulo: 'Formalización Fiscal Básica',
         descripcion: 'Inscripción en el Régimen Simplificado de Confianza (RESICO) y emisión de facturas.',
@@ -121,6 +126,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
     ],
     pasos: [
       {
+        id: 'nivel3-paso1',
         orden: 1,
         titulo: 'Presencia Digital del Negocio',
         descripcion: 'Crear o formalizar redes sociales/catálogo digital para ampliar el alcance de ventas.',
@@ -130,6 +136,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
         plazo: 'Mes 1-3',
       },
       {
+        id: 'nivel3-paso2',
         orden: 2,
         titulo: 'Presupuesto de Inversión',
         descripcion: 'Calcular los requerimientos financieros para el siguiente periodo de crecimiento.',
@@ -159,6 +166,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
     ],
     pasos: [
       {
+        id: 'nivel4-paso1',
         orden: 1,
         titulo: 'Vinculación con Financiamiento',
         descripcion: 'Preparar la documentación necesaria para acceder a crédito empresarial formal.',
@@ -168,6 +176,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
         plazo: 'Mes 1-4',
       },
       {
+        id: 'nivel4-paso2',
         orden: 2,
         titulo: 'Estructura Organizacional',
         descripcion: 'Definir roles, responsabilidades y procesos de contratación del negocio.',
@@ -196,6 +205,7 @@ export const PLAN_POR_NIVEL: Record<number, PlanNivel> = {
     ],
     pasos: [
       {
+        id: 'nivel5-paso1',
         orden: 1,
         titulo: 'Consolidación y Mentoría',
         descripcion: 'Da seguimiento continuo a tus indicadores y participa como mentor de otros negocios en la Ruta CESOFI.',
