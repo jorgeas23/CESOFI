@@ -43,6 +43,7 @@ interface RutaResponse {
   configured?: boolean;
   message?: string;
   folio?: string;
+  generadoPorCesofi?: boolean;
   negocio?: { rfc: string | null; nombreNegocio: string };
   resultado?: { nivel: number; puntajeTotal: number; dscr: number; esViable: boolean };
   diagnosticoIA?: {
@@ -163,16 +164,58 @@ export default function RutaScreen() {
             <Text style={styles.stateText}>{ruta.message}</Text>
           </View>
         ) : !diagnostico || !plan ? (
-          <View style={styles.stateBox}>
-            <Ionicons name="hourglass-outline" size={32} color="#94A3B8" />
-            <Text style={styles.stateTitle}>Diagnóstico en preparación</Text>
-            <Text style={styles.stateText}>
-              Tu asesor todavía no genera tu diagnóstico y plan de mejora personalizado. Vuelve a
-              consultar más tarde.
-            </Text>
-          </View>
+          <>
+            {/* Resultado real de tu evaluación (aunque el plan de IA aún no exista) */}
+            {ruta.resultado && (
+              <View style={styles.levelSummaryCard}>
+                <Text style={styles.evalTitle}>{ruta.negocio?.nombreNegocio}</Text>
+                <View style={styles.levelRow}>
+                  <View style={styles.levelBox}>
+                    <Text style={styles.levelBoxLabel}>Nivel de madurez</Text>
+                    <Text style={styles.levelBoxValue}>{ruta.resultado.nivel}</Text>
+                  </View>
+                  <View style={styles.dividerVertical} />
+                  <View style={styles.levelBox}>
+                    <Text style={styles.levelBoxLabel}>Puntaje</Text>
+                    <Text style={styles.levelBoxValue}>{ruta.resultado.puntajeTotal}</Text>
+                  </View>
+                  <View style={styles.dividerVertical} />
+                  <View style={styles.levelBox}>
+                    <Text style={styles.levelBoxLabel}>Viabilidad</Text>
+                    <View style={[styles.viableBadge, { backgroundColor: ruta.resultado.esViable ? '#DCFCE7' : '#FEE2E2' }]}>
+                      <Text style={[styles.viableBadgeText, { color: ruta.resultado.esViable ? '#15803D' : '#B91C1C' }]}>
+                        {ruta.resultado.esViable ? 'Viable' : 'No viable'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <Text style={styles.resumenText}>
+                  Evaluación financiera: DSCR {ruta.resultado.dscr} · RFC {ruta.negocio?.rfc || 'sin RFC'}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.stateBox}>
+              <Ionicons name="hourglass-outline" size={32} color="#94A3B8" />
+              <Text style={styles.stateTitle}>Plan de mejora en preparación</Text>
+              <Text style={styles.stateText}>
+                Ya tenemos el resultado de tu evaluación. Tu asesor todavía no genera el plan de mejora
+                paso a paso, acciones críticas y recomendaciones personalizadas. Vuelve a consultar más
+                tarde.
+              </Text>
+            </View>
+          </>
         ) : (
           <>
+            {ruta.generadoPorCesofi && (
+              <View style={styles.autoGenBanner}>
+                <Ionicons name="sparkles-outline" size={16} color="#034123" />
+                <Text style={styles.autoGenText}>
+                  Plan generado automáticamente por CESOFI según tu nivel de madurez.
+                </Text>
+              </View>
+            )}
+
             {/* Resumen del nivel actual */}
             <View style={styles.levelSummaryCard}>
               <View style={styles.levelRow}>
@@ -367,6 +410,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 13,
   },
+  autoGenBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#E6F4EA',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+  },
+  autoGenText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#034123',
+    lineHeight: 15,
+  },
   levelSummaryCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -374,6 +432,21 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  evalTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  viableBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  viableBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   levelRow: {
     flexDirection: 'row',

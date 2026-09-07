@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,99 +6,151 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
-import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Header } from '../components/Header';
+import { API_URL } from '../config/api';
 
 interface Achievement {
   id: string;
   title: string;
   description: string;
   points: number;
-  status: 'DESBLOQUEADO' | 'EN_PROGRESO' | 'BLOQUEADO';
+  status: 'DESBLOQUEADO' | 'BLOQUEADO';
   date?: string;
-  progressPercent?: number;
   iconName: string;
-  iconLib: 'ionicons' | 'fa5' | 'mci';
+  iconLib: 'ionicons' | 'mci';
 }
+
+const LEVEL_THRESHOLDS = [
+  { name: 'Bronce', min: 0 },
+  { name: 'Plata', min: 500 },
+  { name: 'Oro', min: 1000 },
+];
 
 export default function LogrosScreen() {
   const [filter, setFilter] = useState<'TODOS' | 'DESBLOQUEADOS' | 'BLOQUEADOS'>('TODOS');
-  const [userPoints, setUserPoints] = useState(350);
+  const [loading, setLoading] = useState(true);
+  const [userPoints, setUserPoints] = useState(0);
   const [userLevel, setUserLevel] = useState('Bronce');
+  const [companyCreatedAt, setCompanyCreatedAt] = useState<string | null>(null);
+  const [hasFolio, setHasFolio] = useState(false);
+  const [hasPlan, setHasPlan] = useState(false);
+  const [evidenceCount, setEvidenceCount] = useState(0);
+  const [hasEvidenceInReview, setHasEvidenceInReview] = useState(false);
+  const [hasEvidenceApproved, setHasEvidenceApproved] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const [companyRes, rutaRes, evidenceRes] = await Promise.all([
+        fetch(`${API_URL}/api/company/me`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/ruta`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/evidence`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      if (companyRes.ok) {
+        const data = await companyRes.json();
+        if (data.company) {
+          setUserPoints(data.company.points ?? 0);
+          setUserLevel(data.company.level || 'Bronce');
+          setCompanyCreatedAt(data.company.createdAt || null);
+          setHasFolio(Boolean(data.company.folioCesofi));
+        }
+      }
+
+      if (rutaRes.ok) {
+        const data = await rutaRes.json();
+        setHasPlan(Boolean(data.linked && data.found && data.diagnosticoIA));
+      }
+
+      if (evidenceRes.ok) {
+        const data = await evidenceRes.json();
+        const evidences = data.evidences || [];
+        setEvidenceCount(evidences.length);
+        setHasEvidenceInReview(evidences.some((e: any) => e.status === 'EN_REVISION' || e.status === 'APROBADO'));
+        setHasEvidenceApproved(evidences.some((e: any) => e.status === 'APROBADO'));
+      }
+    } catch (e) {
+      console.error('Error al cargar datos de logros:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const storedCompany = await AsyncStorage.getItem('userCompany');
-        // Si hay datos en storage, los usamos para mantener coherencia
-      } catch (e) {
-        console.error('Error al cargar datos de logros:', e);
-      }
-    };
     loadData();
-  }, []);
+  }, [loadData]);
 
   const achievements: Achievement[] = [
     {
       id: '1',
-      title: 'Primer Paso Empresarial',
-      description: 'Completaste el registro de tu empresa en la plataforma CESOFI.',
-      points: 100,
+      title: 'Cuenta CESOFI Creada',
+      description: 'Registraste tu empresa en la plataforma CESOFI.',
+      points: 50,
       status: 'DESBLOQUEADO',
-      date: '10 Ene 2026',
+      date: companyCreatedAt ? new Date(companyCreatedAt).toLocaleDateString() : undefined,
       iconName: 'flag',
       iconLib: 'ionicons',
     },
     {
       id: '2',
-      title: 'Diagnóstico Inicial',
-      description: 'Evaluaste el estado de madurez de tu negocio.',
-      points: 150,
-      status: 'DESBLOQUEADO',
-      date: '15 Ene 2026',
+      title: 'Folio Vinculado a SIDEC',
+      description: 'Conectaste tu Folio de Atención CESOFI para traer tu diagnóstico real.',
+      points: 50,
+      status: hasFolio ? 'DESBLOQUEADO' : 'BLOQUEADO',
+      iconName: 'pricetag',
+      iconLib: 'ionicons',
+    },
+    {
+      id: '3',
+      title: 'Plan de Mejora Recibido',
+      description: 'Tu asesor generó tu diagnóstico y plan de mejora personalizado.',
+      points: 100,
+      status: hasPlan ? 'DESBLOQUEADO' : 'BLOQUEADO',
       iconName: 'clipboard-check',
       iconLib: 'mci',
     },
     {
-      id: '3',
-      title: 'Estratega de Negocio',
-      description: 'Diseño e implementación del Plan de Negocios.',
-      points: 100,
-      status: 'EN_PROGRESO',
-      progressPercent: 60,
-      iconName: 'file-signature',
-      iconLib: 'fa5',
-    },
-    {
       id: '4',
-      title: 'Maestro Financiero',
-      description: 'Calculaste y estructuraste el presupuesto de inversión.',
-      points: 150,
-      status: 'BLOQUEADO',
-      iconName: 'calculator',
+      title: 'Primera Evidencia Cargada',
+      description: 'Subiste tu primer documento oficial al expediente digital.',
+      points: 100,
+      status: evidenceCount > 0 ? 'DESBLOQUEADO' : 'BLOQUEADO',
+      iconName: 'file-upload',
       iconLib: 'mci',
     },
     {
       id: '5',
-      title: 'Negocio Formal',
-      description: 'Registro oficial y constancia de situación fiscal ante el SAT.',
-      points: 150,
-      status: 'BLOQUEADO',
+      title: 'Expediente en Dictamen',
+      description: 'Tienes al menos un documento en proceso de revisión oficial.',
+      points: 100,
+      status: hasEvidenceInReview ? 'DESBLOQUEADO' : 'BLOQUEADO',
       iconName: 'shield-checkmark-outline',
       iconLib: 'ionicons',
     },
     {
       id: '6',
-      title: 'Graduado CESOFI',
-      description: 'Completaste exitosamente 3 capacitaciones empresariales.',
-      points: 200,
-      status: 'BLOQUEADO',
-      iconName: 'school-outline',
+      title: 'Documento Aprobado',
+      description: 'El comité de dictamen aprobó uno de tus documentos.',
+      points: 150,
+      status: hasEvidenceApproved ? 'DESBLOQUEADO' : 'BLOQUEADO',
+      iconName: 'ribbon',
       iconLib: 'ionicons',
     },
   ];
+
+  const unlockedCount = achievements.filter((a) => a.status === 'DESBLOQUEADO').length;
+  const currentLevelIndex = LEVEL_THRESHOLDS.findIndex((l) => l.name === userLevel);
+  const nextLevel = LEVEL_THRESHOLDS[currentLevelIndex + 1];
+  const levelProgressPercent = nextLevel
+    ? Math.min(100, Math.round((userPoints / nextLevel.min) * 100))
+    : 100;
 
   const filteredAchievements = achievements.filter((item) => {
     if (filter === 'DESBLOQUEADOS') return item.status === 'DESBLOQUEADO';
@@ -108,12 +160,8 @@ export default function LogrosScreen() {
 
   const renderIcon = (item: Achievement) => {
     const isUnlocked = item.status === 'DESBLOQUEADO';
-    const isProgress = item.status === 'EN_PROGRESO';
-    const color = isUnlocked ? '#034123' : isProgress ? '#D97706' : '#94A3B8';
+    const color = isUnlocked ? '#034123' : '#94A3B8';
 
-    if (item.iconLib === 'fa5') {
-      return <FontAwesome5 name={item.iconName as any} size={20} color={color} />;
-    }
     if (item.iconLib === 'mci') {
       return <MaterialCommunityIcons name={item.iconName as any} size={22} color={color} />;
     }
@@ -149,16 +197,26 @@ export default function LogrosScreen() {
 
           {/* Barra de Progreso hacia el siguiente Nivel */}
           <View style={styles.progressSection}>
-            <View style={styles.progressTextRow}>
-              <Text style={styles.progressLabel}>Progreso al Nivel Plata (500 pts)</Text>
-              <Text style={styles.progressPercent}>70%</Text>
-            </View>
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: '70%' }]} />
-            </View>
-            <Text style={styles.progressFootnote}>
-              ¡Te faltan solo 150 puntos para alcanzar el nivel Plata y desbloquear asesorías personalizadas!
-            </Text>
+            {nextLevel ? (
+              <>
+                <View style={styles.progressTextRow}>
+                  <Text style={styles.progressLabel}>
+                    Progreso al Nivel {nextLevel.name} ({nextLevel.min} pts)
+                  </Text>
+                  <Text style={styles.progressPercent}>{levelProgressPercent}%</Text>
+                </View>
+                <View style={styles.progressBarBg}>
+                  <View style={[styles.progressBarFill, { width: `${levelProgressPercent}%` }]} />
+                </View>
+                <Text style={styles.progressFootnote}>
+                  {Math.max(nextLevel.min - userPoints, 0) === 0
+                    ? '¡Ya alcanzaste el puntaje para subir de nivel!'
+                    : `Te faltan ${nextLevel.min - userPoints} puntos para alcanzar el nivel ${nextLevel.name}.`}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.progressFootnote}>¡Alcanzaste el nivel máximo de la Ruta CESOFI!</Text>
+            )}
           </View>
         </View>
 
@@ -178,7 +236,7 @@ export default function LogrosScreen() {
             onPress={() => setFilter('DESBLOQUEADOS')}
           >
             <Text style={[styles.filterText, filter === 'DESBLOQUEADOS' && styles.activeFilterText]}>
-              Desbloqueadas (2)
+              Desbloqueadas ({unlockedCount})
             </Text>
           </TouchableOpacity>
 
@@ -187,34 +245,28 @@ export default function LogrosScreen() {
             onPress={() => setFilter('BLOQUEADOS')}
           >
             <Text style={[styles.filterText, filter === 'BLOQUEADOS' && styles.activeFilterText]}>
-              En Camino (4)
+              En Camino ({achievements.length - unlockedCount})
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Galería de Insignias */}
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#034123" />
+          </View>
+        ) : (
         <View style={styles.achievementsList}>
           {filteredAchievements.map((item) => {
             const isUnlocked = item.status === 'DESBLOQUEADO';
-            const isProgress = item.status === 'EN_PROGRESO';
 
             return (
               <View
                 key={item.id}
-                style={[
-                  styles.achievementCard,
-                  isUnlocked && styles.unlockedCard,
-                  isProgress && styles.progressCard,
-                ]}
+                style={[styles.achievementCard, isUnlocked && styles.unlockedCard]}
               >
                 <View style={styles.cardLeftRow}>
-                  <View
-                    style={[
-                      styles.iconBg,
-                      isUnlocked && styles.unlockedIconBg,
-                      isProgress && styles.progressIconBg,
-                    ]}
-                  >
+                  <View style={[styles.iconBg, isUnlocked && styles.unlockedIconBg]}>
                     {renderIcon(item)}
                   </View>
 
@@ -226,20 +278,6 @@ export default function LogrosScreen() {
                       )}
                     </View>
                     <Text style={styles.achievementDesc}>{item.description}</Text>
-
-                    {isProgress && (
-                      <View style={styles.miniProgressRow}>
-                        <View style={styles.miniProgressBg}>
-                          <View
-                            style={[
-                              styles.miniProgressFill,
-                              { width: `${item.progressPercent}%` },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.miniProgressText}>{item.progressPercent}%</Text>
-                      </View>
-                    )}
 
                     {isUnlocked && item.date && (
                       <Text style={styles.unlockedDate}>Conseguido el {item.date}</Text>
@@ -267,16 +305,19 @@ export default function LogrosScreen() {
             );
           })}
         </View>
+        )}
 
         {/* Sección de Beneficios por Nivel */}
         <View style={styles.benefitsSection}>
           <Text style={styles.benefitsTitle}>Beneficios por Nivel Empresarial</Text>
 
-          <View style={styles.benefitCard}>
+          <View style={[styles.benefitCard, userLevel === 'Bronce' && styles.benefitCardCurrent]}>
             <View style={styles.benefitHeader}>
               <View style={[styles.badgeDot, { backgroundColor: '#D97706' }]} />
-              <Text style={styles.benefitLevelName}>Nivel Bronce (Actual)</Text>
-              <Text style={styles.unlockedTag}>DESBLOQUEADO</Text>
+              <Text style={styles.benefitLevelName}>
+                Nivel Bronce{userLevel === 'Bronce' ? ' (Actual)' : ''}
+              </Text>
+              {userLevel === 'Bronce' && <Text style={styles.unlockedTag}>DESBLOQUEADO</Text>}
             </View>
             <Text style={styles.benefitDesc}>
               • Acceso completo a Mi Ruta CESOFI{'\n'}
@@ -285,11 +326,15 @@ export default function LogrosScreen() {
             </Text>
           </View>
 
-          <View style={[styles.benefitCard, { opacity: 0.8 }]}>
+          <View style={[styles.benefitCard, userLevel === 'Plata' && styles.benefitCardCurrent, userLevel === 'Bronce' && { opacity: 0.8 }]}>
             <View style={styles.benefitHeader}>
               <View style={[styles.badgeDot, { backgroundColor: '#64748B' }]} />
-              <Text style={styles.benefitLevelName}>Nivel Plata (500 pts)</Text>
-              <Text style={styles.lockedTag}>PRÓXIMAMENTE</Text>
+              <Text style={styles.benefitLevelName}>
+                Nivel Plata (500 pts){userLevel === 'Plata' ? ' (Actual)' : ''}
+              </Text>
+              <Text style={userPoints >= 500 ? styles.unlockedTag : styles.lockedTag}>
+                {userPoints >= 500 ? 'DESBLOQUEADO' : 'PRÓXIMAMENTE'}
+              </Text>
             </View>
             <Text style={styles.benefitDesc}>
               • 1 Asesoría personalizada 1-a-1 al mes{'\n'}
@@ -298,11 +343,15 @@ export default function LogrosScreen() {
             </Text>
           </View>
 
-          <View style={[styles.benefitCard, { opacity: 0.6 }]}>
+          <View style={[styles.benefitCard, userLevel === 'Oro' && styles.benefitCardCurrent, userLevel !== 'Oro' && { opacity: 0.6 }]}>
             <View style={styles.benefitHeader}>
               <View style={[styles.badgeDot, { backgroundColor: '#EAB308' }]} />
-              <Text style={styles.benefitLevelName}>Nivel Oro (1,000 pts)</Text>
-              <Text style={styles.lockedTag}>PRÓXIMAMENTE</Text>
+              <Text style={styles.benefitLevelName}>
+                Nivel Oro (1,000 pts){userLevel === 'Oro' ? ' (Actual)' : ''}
+              </Text>
+              <Text style={userPoints >= 1000 ? styles.unlockedTag : styles.lockedTag}>
+                {userPoints >= 1000 ? 'DESBLOQUEADO' : 'PRÓXIMAMENTE'}
+              </Text>
             </View>
             <Text style={styles.benefitDesc}>
               • Vinculación prioritaria con fondos y créditos empresariales{'\n'}
@@ -438,6 +487,10 @@ const styles = StyleSheet.create({
   activeFilterText: {
     color: '#FFFFFF',
   },
+  loadingBox: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
   achievementsList: {
     gap: 12,
     marginBottom: 24,
@@ -570,6 +623,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  benefitCardCurrent: {
+    borderColor: '#A7F3D0',
+    backgroundColor: '#F0FDF4',
   },
   benefitHeader: {
     flexDirection: 'row',

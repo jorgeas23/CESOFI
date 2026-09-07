@@ -22,9 +22,13 @@ const logoImg = require('../../assets/logo.png');
 export default function RegisterScreen() {
   const router = useRouter();
 
+  // Modo de registro: empresa nueva (manual) o empresario ya evaluado por SIDEC (por folio)
+  const [mode, setMode] = useState<'manual' | 'folio'>('manual');
+
   // Estados del Formulario sincronizados con el backend
   const [companyName, setCompanyName] = useState('');
   const [rfc, setRfc] = useState(''); // Opcional
+  const [folio, setFolio] = useState(''); // Modo "folio"
   const [name, setName] = useState(''); // Nombre del contacto
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,13 +39,23 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [successCompanyName, setSuccessCompanyName] = useState('');
 
   const handleRegister = async () => {
     setErrorMessage('');
 
-    // Validaciones obligatorias
-    if (!companyName.trim() || !name.trim() || !email.trim() || !password) {
+    if (!name.trim() || !email.trim() || !password) {
       setErrorMessage('Por favor completa todos los campos obligatorios (*).');
+      return;
+    }
+
+    if (mode === 'manual' && !companyName.trim()) {
+      setErrorMessage('Por favor completa todos los campos obligatorios (*).');
+      return;
+    }
+
+    if (mode === 'folio' && !folio.trim()) {
+      setErrorMessage('Ingresa tu Folio de Atención CESOFI.');
       return;
     }
 
@@ -50,20 +64,22 @@ export default function RegisterScreen() {
       return;
     }
 
-    const payload = {
-      companyName: companyName.trim(),
-      name: name.trim(),
-      email: email.trim(),
-      password,
-      rfc: rfc.trim() ? rfc.trim() : null,
-    };
+    const endpoint = mode === 'folio' ? '/api/auth/register-folio' : '/api/auth/register';
+    const payload =
+      mode === 'folio'
+        ? { folio: folio.trim(), name: name.trim(), email: email.trim(), password }
+        : {
+            companyName: companyName.trim(),
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            rfc: rfc.trim() ? rfc.trim() : null,
+          };
 
     setLoading(true);
 
     try {
-      console.log('Enviando datos al backend:', payload);
-
-      const response = await fetch(`${API_URL}/api/auth/register`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -77,7 +93,7 @@ export default function RegisterScreen() {
         throw new Error(data.error || 'Ocurrió un error al registrarse.');
       }
 
-      // Éxito garantizado -> mostrar pantalla de éxito
+      setSuccessCompanyName(data.user?.company?.name || companyName);
       setIsSuccess(true);
     } catch (error: any) {
       console.error('Error en el registro:', error);
@@ -98,7 +114,7 @@ export default function RegisterScreen() {
           </View>
           <Text style={styles.successTitle}>¡Registro Exitoso!</Text>
           <Text style={styles.successSubtitle}>
-            Tu cuenta y la empresa <Text style={styles.boldText}>{companyName}</Text> han sido creadas correctamente en la plataforma CESOFI.
+            Tu cuenta y la empresa <Text style={styles.boldText}>{successCompanyName}</Text> han sido creadas correctamente en la plataforma CESOFI.
           </Text>
 
           <TouchableOpacity
@@ -154,39 +170,85 @@ export default function RegisterScreen() {
               </View>
             ) : null}
 
-            {/* Nombre de la Empresa */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nombre de la Empresa *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="business-outline" size={20} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej. Industrias CESOFI S.A."
-                  placeholderTextColor="#94A3B8"
-                  value={companyName}
-                  onChangeText={setCompanyName}
-                />
-              </View>
+            {/* Selector de modo de registro */}
+            <View style={styles.modeSelector}>
+              <TouchableOpacity
+                style={[styles.modeTab, mode === 'manual' && styles.modeTabActive]}
+                onPress={() => setMode('manual')}
+              >
+                <Text style={[styles.modeTabText, mode === 'manual' && styles.modeTabTextActive]}>
+                  Registro Manual
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeTab, mode === 'folio' && styles.modeTabActive]}
+                onPress={() => setMode('folio')}
+              >
+                <Text style={[styles.modeTabText, mode === 'folio' && styles.modeTabTextActive]}>
+                  Ya tengo Folio CESOFI
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* RFC (Opcional) */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelWrapper}>
-                <Text style={styles.label}>RFC / Identificación Fiscal</Text>
-                <Text style={styles.optionalText}>(Opcional)</Text>
-              </View>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="card-outline" size={20} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="ABC123456XYZ"
-                  placeholderTextColor="#94A3B8"
-                  autoCapitalize="characters"
-                  value={rfc}
-                  onChangeText={setRfc}
-                />
-              </View>
-            </View>
+            {mode === 'folio' ? (
+              <>
+                {/* Folio de Atención CESOFI */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Folio de Atención CESOFI *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="pricetag-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ej. CESOFI-2026-0002"
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="characters"
+                      value={folio}
+                      onChangeText={setFolio}
+                    />
+                  </View>
+                  <Text style={styles.helperText}>
+                    Es el folio que te asignó tu asesor cuando evaluaron tu negocio. Con él traemos
+                    automáticamente el nombre y RFC de tu empresa.
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Nombre de la Empresa */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Nombre de la Empresa *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="business-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ej. Industrias CESOFI S.A."
+                      placeholderTextColor="#94A3B8"
+                      value={companyName}
+                      onChangeText={setCompanyName}
+                    />
+                  </View>
+                </View>
+
+                {/* RFC (Opcional) */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelWrapper}>
+                    <Text style={styles.label}>RFC / Identificación Fiscal</Text>
+                    <Text style={styles.optionalText}>(Opcional)</Text>
+                  </View>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="card-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="ABC123456XYZ"
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="characters"
+                      value={rfc}
+                      onChangeText={setRfc}
+                    />
+                  </View>
+                </View>
+              </>
+            )}
 
             {/* Persona de Contacto */}
             <View style={styles.inputGroup}>
@@ -333,6 +395,36 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: '100%',
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 20,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modeTabActive: {
+    backgroundColor: '#034123',
+  },
+  modeTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  modeTabTextActive: {
+    color: '#FFFFFF',
+  },
+  helperText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 6,
+    lineHeight: 15,
   },
   inputGroup: {
     marginBottom: 16,

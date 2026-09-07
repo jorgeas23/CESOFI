@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { obtenerDiagnosticoPorFolio, DiagnosticoApiError, isDiagnosticoApiConfigured } from '../lib/diagnosticoApi';
+import { PLAN_POR_NIVEL } from '../data/planPorNivel';
 
 // Obtiene la Ruta CESOFI (plan de mejora, acciones críticas y recomendaciones/capacitaciones)
 // consultando la API externa del Sistema de Diagnóstico Financiero con el folio vinculado
@@ -42,10 +43,36 @@ export const getRuta = async (req: AuthenticatedRequest, res: Response): Promise
       return;
     }
 
+    // Si el asesor de SIDEC aún no generó un diagnóstico de IA personalizado, construimos la
+    // Ruta con el catálogo propio de CESOFI a partir del nivel de madurez que SIDEC sí entrega
+    // siempre. Esto es lo que de verdad nos interesa de la evaluación: el nivel.
+    let diagnosticoIA = diagnostico.diagnosticoIA;
+    let generadoPorCesofi = false;
+
+    if (!diagnosticoIA && diagnostico.resultado) {
+      const plantilla = PLAN_POR_NIVEL[diagnostico.resultado.nivel];
+      if (plantilla) {
+        diagnosticoIA = {
+          resumenGeneral: 'Plan generado automáticamente por CESOFI según tu nivel de madurez.',
+          accionesCriticas: plantilla.accionesCriticas,
+          recomendaciones: plantilla.recomendaciones,
+          planMejoraNivel: {
+            nivelActual: diagnostico.resultado.nivel,
+            nivelObjetivo: plantilla.nivelObjetivo,
+            tiempoEstimado: plantilla.tiempoEstimado,
+            pasos: plantilla.pasos,
+          },
+        };
+        generadoPorCesofi = true;
+      }
+    }
+
     res.json({
       linked: true,
       found: true,
       ...diagnostico,
+      diagnosticoIA,
+      generadoPorCesofi,
     });
   } catch (error) {
     if (error instanceof DiagnosticoApiError) {

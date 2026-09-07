@@ -9,13 +9,34 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Header } from '../components/Header';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { useNavigateWithLoading } from '../hooks/useNavigateWithLoading';
 import { isTokenExpired, clearSession } from '../utils/auth';
+import { API_URL } from '../config/api';
+
+interface PlanPaso {
+  orden: number;
+  titulo: string;
+  area: string;
+  plazo: string;
+}
+
+interface RutaResumen {
+  linked: boolean;
+  found?: boolean;
+  resultado?: { nivel: number; puntajeTotal: number; esViable: boolean };
+  diagnosticoIA?: {
+    planMejoraNivel: {
+      nivelActual: number;
+      nivelObjetivo: number;
+      pasos: PlanPaso[];
+    };
+  } | null;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -25,6 +46,36 @@ export default function HomeScreen() {
   const [userName, setUserName] = useState('Usuario');
   const [userCompany, setUserCompany] = useState('Empresa CESOFI');
   const [userInitials, setUserInitials] = useState('U');
+  const [points, setPoints] = useState(0);
+  const [ruta, setRuta] = useState<RutaResumen | null>(null);
+  const [loadingRuta, setLoadingRuta] = useState(true);
+
+  const loadCompanyAndRuta = async (token: string) => {
+    try {
+      setLoadingRuta(true);
+      const [companyRes, rutaRes] = await Promise.all([
+        fetch(`${API_URL}/api/company/me`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/ruta`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      if (companyRes.ok) {
+        const data = await companyRes.json();
+        if (data.company) {
+          setPoints(data.company.points ?? 0);
+          setUserCompany(data.company.name || 'Empresa CESOFI');
+          await AsyncStorage.setItem('userCompany', data.company.name || 'Empresa CESOFI');
+        }
+      }
+
+      if (rutaRes.ok) {
+        setRuta(await rutaRes.json());
+      }
+    } catch (error) {
+      console.error('Error al cargar empresa/ruta:', error);
+    } finally {
+      setLoadingRuta(false);
+    }
+  };
 
   // Comprobar token y cargar datos del usuario (inicio y pull-to-refresh)
   const checkAuthAndLoadData = async (isRefresh = false) => {
@@ -56,6 +107,8 @@ export default function HomeScreen() {
       if (storedCompany) {
         setUserCompany(storedCompany);
       }
+
+      await loadCompanyAndRuta(token);
     } catch (error) {
       console.error('Error al verificar sesión:', error);
       router.replace('/login');
@@ -76,6 +129,9 @@ export default function HomeScreen() {
     setRefreshing(true);
     checkAuthAndLoadData(true);
   };
+
+  const plan = ruta?.diagnosticoIA?.planMejoraNivel;
+  const proximosPasos = plan?.pasos?.slice(0, 3) || [];
 
   const quickActions = [
     {
@@ -120,39 +176,6 @@ export default function HomeScreen() {
     },
   ];
 
-  const activities = [
-    {
-      id: '1',
-      number: '1',
-      title: 'Plan de negocios',
-      status: 'EN PROCESO',
-      statusBg: '#FEF3C7',
-      statusColor: '#D97706',
-      points: '+100 pts',
-      icon: 'file-document-outline',
-    },
-    {
-      id: '2',
-      number: '2',
-      title: 'Presupuesto de inversión',
-      status: 'PENDIENTE',
-      statusBg: '#F1F5F9',
-      statusColor: '#475569',
-      points: '+150 pts',
-      icon: 'calculator',
-    },
-    {
-      id: '3',
-      number: '3',
-      title: 'Registro ante el SAT',
-      status: 'PENDIENTE',
-      statusBg: '#F1F5F9',
-      statusColor: '#475569',
-      points: '+150 pts',
-      icon: 'domain',
-    },
-  ];
-
   // Si está verificando autenticación, mostramos spinner limpio
   if (checkingAuth) {
     return (
@@ -190,7 +213,7 @@ export default function HomeScreen() {
 
             <View style={styles.pointsBadge}>
               <Ionicons name="star" size={16} color="#EAB308" />
-              <Text style={styles.pointsText}>350 pts</Text>
+              <Text style={styles.pointsText}>{points} pts</Text>
             </View>
           </View>
 
@@ -219,83 +242,125 @@ export default function HomeScreen() {
         </View>
 
         {/* Tarjeta Destacada "Mi Ruta CESOFI" */}
-        <View style={styles.routeCard}>
-          <View style={styles.routeCardHeader}>
+        {loadingRuta ? (
+          <View style={styles.routeCard}>
+            <ActivityIndicator size="small" color="#034123" />
+          </View>
+        ) : !ruta?.linked || !ruta.found ? (
+          <TouchableOpacity
+            style={styles.routeCardEmpty}
+            activeOpacity={0.85}
+            onPress={() => navigate(!ruta?.linked ? '/mi-empresa' : '/ruta', 'Cargando...')}
+          >
             <View style={styles.routeIconBg}>
               <FontAwesome5 name="route" size={20} color="#034123" />
             </View>
             <View style={styles.routeHeaderInfo}>
               <Text style={styles.routeTitle}>Mi Ruta CESOFI</Text>
-              <Text style={styles.routeSubtitle}>Avance general de tu plan</Text>
+              <Text style={styles.routeSubtitle}>
+                {!ruta?.linked
+                  ? 'Vincula tu Folio CESOFI en Mi Empresa para ver tu plan de mejora'
+                  : 'Tu folio aún no tiene una evaluación registrada'}
+              </Text>
             </View>
-            <View style={styles.percentBadge}>
-              <Text style={styles.percentText}>60%</Text>
-            </View>
-          </View>
-
-          {/* Barra de Progreso */}
-          <View style={styles.progressBarBackground}>
-            <View style={[styles.progressBarFill, { width: '60%' }]} />
-          </View>
-
-          <View style={styles.routeFooterRow}>
-            <Text style={styles.routeFooterText}>3 de 5 tareas completadas</Text>
-
-            <TouchableOpacity
-              style={styles.continueRouteButton}
-              onPress={() => navigate('/ruta', 'Cargando Mi Ruta...')}
-            >
-              <Text style={styles.continueRouteText}>Continuar Ruta</Text>
-              <Ionicons name="arrow-forward" size={14} color="#034123" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Próximas Actividades */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Próximas Actividades</Text>
-          <TouchableOpacity onPress={() => navigate('/ruta', 'Cargando Mi Ruta...')}>
-            <Text style={styles.seeAllText}>Ver todas</Text>
+            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.activitiesList}>
-          {activities.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.activityCard}
-              activeOpacity={0.8}
-              onPress={() => navigate('/ruta', 'Cargando Mi Ruta...')}
-            >
-              <View style={styles.activityLeft}>
-                <View style={styles.numberBadge}>
-                  <Text style={styles.numberText}>{item.number}</Text>
-                </View>
-
-                <View style={styles.activityIconBg}>
-                  <MaterialCommunityIcons
-                    name={item.icon as any}
-                    size={20}
-                    color="#475569"
-                  />
-                </View>
-
-                <Text style={styles.activityTitle} numberOfLines={1}>
-                  {item.title}
+        ) : !plan ? (
+          <TouchableOpacity
+            style={styles.routeCard}
+            activeOpacity={0.85}
+            onPress={() => navigate('/ruta', 'Cargando Mi Ruta...')}
+          >
+            <View style={styles.routeCardHeader}>
+              <View style={styles.routeIconBg}>
+                <FontAwesome5 name="route" size={20} color="#034123" />
+              </View>
+              <View style={styles.routeHeaderInfo}>
+                <Text style={styles.routeTitle}>Mi Ruta CESOFI</Text>
+                <Text style={styles.routeSubtitle}>
+                  {ruta.resultado
+                    ? `Nivel de madurez: ${ruta.resultado.nivel} · Puntaje ${ruta.resultado.puntajeTotal}`
+                    : 'Plan de mejora en preparación'}
                 </Text>
               </View>
-
-              <View style={styles.activityRight}>
-                <View style={[styles.statusBadge, { backgroundColor: item.statusBg }]}>
-                  <Text style={[styles.statusText, { color: item.statusColor }]}>
-                    {item.status}
-                  </Text>
-                </View>
-                <Text style={styles.activityPoints}>{item.points}</Text>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </View>
+            <View style={styles.routeFooterRow}>
+              <Text style={styles.routeFooterText}>
+                Tu asesor todavía no genera tu plan de mejora paso a paso
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.routeCard}>
+            <View style={styles.routeCardHeader}>
+              <View style={styles.routeIconBg}>
+                <FontAwesome5 name="route" size={20} color="#034123" />
               </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <View style={styles.routeHeaderInfo}>
+                <Text style={styles.routeTitle}>Mi Ruta CESOFI</Text>
+                <Text style={styles.routeSubtitle}>
+                  Nivel {plan.nivelActual} → Meta: Nivel {plan.nivelObjetivo}
+                </Text>
+              </View>
+              <View style={styles.percentBadge}>
+                <Text style={styles.percentText}>{plan.pasos.length} pasos</Text>
+              </View>
+            </View>
+
+            <View style={styles.routeFooterRow}>
+              <Text style={styles.routeFooterText}>Tu plan de mejora personalizado ya está listo</Text>
+
+              <TouchableOpacity
+                style={styles.continueRouteButton}
+                onPress={() => navigate('/ruta', 'Cargando Mi Ruta...')}
+              >
+                <Text style={styles.continueRouteText}>Ver Ruta</Text>
+                <Ionicons name="arrow-forward" size={14} color="#034123" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Próximos pasos del plan de mejora */}
+        {proximosPasos.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Próximos Pasos de tu Plan</Text>
+              <TouchableOpacity onPress={() => navigate('/ruta', 'Cargando Mi Ruta...')}>
+                <Text style={styles.seeAllText}>Ver todas</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.activitiesList}>
+              {proximosPasos.map((item) => (
+                <TouchableOpacity
+                  key={item.orden}
+                  style={styles.activityCard}
+                  activeOpacity={0.8}
+                  onPress={() => navigate('/ruta', 'Cargando Mi Ruta...')}
+                >
+                  <View style={styles.activityLeft}>
+                    <View style={styles.numberBadge}>
+                      <Text style={styles.numberText}>{item.orden}</Text>
+                    </View>
+
+                    <Text style={styles.activityTitle} numberOfLines={1}>
+                      {item.titulo}
+                    </Text>
+                  </View>
+
+                  <View style={styles.activityRight}>
+                    <View style={[styles.statusBadge, { backgroundColor: '#F1F5F9' }]}>
+                      <Text style={[styles.statusText, { color: '#475569' }]}>{item.area}</Text>
+                    </View>
+                    <Text style={styles.activityPoints}>{item.plazo}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* Banner Motivacional de Soporte */}
         <TouchableOpacity
@@ -464,6 +529,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
+  },
+  routeCardEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   routeCardHeader: {
     flexDirection: 'row',

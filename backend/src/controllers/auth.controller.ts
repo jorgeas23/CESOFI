@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { JWT_SECRET } from '../lib/env';
+import { obtenerDiagnosticoPorFolio, DiagnosticoApiError } from '../lib/diagnosticoApi';
 
 // REGISTRO DE USUARIO Y SU EMPRESA
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -61,6 +62,78 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     res.status(500).json({ error: 'Error interno del servidor al registrar usuario' });
+  }
+};
+
+// REGISTRO DE EMPRESARIOS YA EXISTENTES EN SIDEC (por Folio de Atención CESOFI):
+// el nombre y RFC de la empresa se traen de SIDEC, no los teclea el usuario.
+export const registerByFolio = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { folio, email, password, name } = req.body;
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      res.status(400).json({ error: 'El correo electrónico ya está registrado' });
+      return;
+    }
+
+    const existingCompany = await prisma.company.findUnique({ where: { folioCesofi: folio } });
+    if (existingCompany) {
+      res.status(400).json({ error: 'Ese Folio ya tiene una cuenta creada. Inicia sesión en su lugar.' });
+      return;
+    }
+
+    const diagnostico = await obtenerDiagnosticoPorFolio(folio);
+    if (!diagnostico) {
+      res.status(404).json({ error: `No existe una evaluación registrada para el folio ${folio}.` });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        name,
+        company: {
+          create: {
+            name: diagnostico.negocio.nombreNegocio,
+            folioCesofi: folio,
+            ...(diagnostico.negocio.rfc ? { rfc: diagnostico.negocio.rfc } : {}),
+          },
+        },
+      },
+      include: { company: true },
+    });
+
+    const token = jwt.sign({ userId: newUser.id, role: newUser.role }, JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    res.status(201).json({
+      message: 'Cuenta vinculada exitosamente a tu expediente CESOFI',
+      token,
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        company: newUser.company,
+      },
+    });
+  } catch (error: any) {
+    if (error instanceof DiagnosticoApiError) {
+      console.error('Error de la API de Diagnóstico durante registro por folio:', error.message);
+      res.status(502).json({ error: 'No se pudo validar tu Folio con el Sistema de Diagnóstico. Intenta de nuevo más tarde.' });
+      return;
+    }
+
+    console.error('Error en registro por folio:', error);
+    if (error.code === 'P2002') {
+      res.status(400).json({ error: 'El correo o el RFC ya se encuentran registrados.' });
+      return;
+    }
+    res.status(500).json({ error: 'Error interno del servidor al registrar la cuenta' });
   }
 };
 

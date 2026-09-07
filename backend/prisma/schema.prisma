@@ -124,3 +124,49 @@ model Evidence {
   @@index([activityId])
   @@index([status])
 }
+
+// ----------------------------------------------------
+// RECEPCIÓN PUSH DEL SISTEMA DE DIAGNÓSTICO (POST /api/externo/casos)
+// Contrato: seguimiento-cesofi v1. Independiente de Company/User a propósito:
+// un caso puede llegar antes de que el empresario se registre en la app.
+// El folio los enlaza cuando haga falta (Company.folioCesofi === folio).
+// ----------------------------------------------------
+model DiagnosticoCaso {
+  id          String  @id @default(uuid())
+  folio       String  @unique
+  folioSedeco String?
+
+  evaluacionId    Int?
+  fechaEvaluacion DateTime?
+  actualizadoEn   DateTime?
+
+  emisorSistema     String?
+  emisorInstalacion String?
+  asesorNombre      String?
+  asesorEmail       String?
+
+  empresarioFolioSedeco String?
+  empresarioNombre      String?
+  empresarioRfc         String?
+  empresarioCurp        String?
+  empresarioTelefono    String?
+  empresarioEmail       String?
+
+  negocioNombre String
+  negocioSector String?
+  negocioJson   Json? // resto de `negocio` (giro, ubicación, antigüedad, etc.)
+
+  evaluacionJson  Json? // `evaluacion`: resultado / atencion / parametrosCredito
+  diagnosticoJson Json // `diagnostico` completo: fortalezas, riesgos, accionesCriticas, recomendaciones, planMejoraNivel...
+
+  recibidoEn         DateTime @default(now())
+  actualizadoLocalEn DateTime @updatedAt
+
+  @@index([folioSedeco])
+}
+
+model CasoIdempotencia {
+  idempotencyKey String   @id
+  casoId         String
+  createdAt      DateTime @default(now())
+}
