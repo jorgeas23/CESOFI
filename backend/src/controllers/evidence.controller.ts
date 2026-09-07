@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { supabaseAdmin } from '../lib/supabaseAdmin';
 import { SUPABASE_EVIDENCE_BUCKET } from '../lib/env';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { resolverPuntosDePaso, calcularNivelPorPuntos } from '../lib/resolvePuntosPaso';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hora
 
@@ -138,12 +139,17 @@ export const createEvidence = async (
       return;
     }
 
+    // Capturamos el valor en puntos del paso en este momento: si el plan cambia después,
+    // el empresario conserva lo que vio y le prometimos cuando subió su evidencia.
+    const pointsReward = await resolverPuntosDePaso(company, pasoId);
+
     // Crear la evidencia en estado EN_REVISION para dictamen oficial
     const newEvidence = await prisma.evidence.create({
       data: {
         companyId: company.id,
         activityId: activityId || undefined,
         pasoId: pasoId || undefined,
+        pointsReward,
         title: title.trim(),
         fileUrl: storagePath,
         fileName: file.originalname,
@@ -215,6 +221,19 @@ export const reviewEvidence = async (
       where: { id },
       data: { status, feedback: feedback || null },
     });
+
+    // Solo se otorgan los puntos la primera vez que se aprueba — nunca dos veces por la
+    // misma evidencia, aunque alguien vuelva a dictaminarla.
+    if (status === 'APROBADO' && evidence.status !== 'APROBADO' && evidence.pointsReward) {
+      const company = await prisma.company.update({
+        where: { id: evidence.companyId },
+        data: { points: { increment: evidence.pointsReward } },
+      });
+      await prisma.company.update({
+        where: { id: company.id },
+        data: { level: calcularNivelPorPuntos(company.points) },
+      });
+    }
 
     res.json({ message: 'Evidencia dictaminada exitosamente', evidence: actualizada });
   } catch (error) {

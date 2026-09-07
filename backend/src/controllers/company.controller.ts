@@ -137,3 +137,24 @@ export const updateCompanyProfile = async (
     res.status(500).json({ error: 'Error interno del servidor al actualizar la empresa' });
   }
 };
+
+// [ADMIN] Directorio completo de empresarios registrados
+export const listCompaniesForAdmin = async (
+  _req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const companies = await prisma.company.findMany({
+      include: {
+        user: { select: { name: true, email: true } },
+        _count: { select: { evidences: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ message: 'Empresas obtenidas exitosamente', companies });
+  } catch (error) {
+    console.error('Error al listar empresas para admin:', error);
+    res.status(500).json({ error: 'Error interno al consultar las empresas' });
+  }
+};

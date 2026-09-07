@@ -1,10 +1,14 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomBytes, createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { JWT_SECRET } from '../lib/env';
 import { obtenerDiagnosticoPorFolio, DiagnosticoApiError } from '../lib/diagnosticoApi';
 import { mapCasoADiagnostico } from '../lib/mapCasoDiagnostico';
+
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutos
+const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 // REGISTRO DE USUARIO Y SU EMPRESA
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -220,5 +224,65 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
   } catch (error) {
     console.error('Error al cambiar contraseña:', error);
     res.status(500).json({ error: 'Error interno del servidor al cambiar la contraseña' });
+  }
+};
+
+// SOLICITAR RECUPERACIÓN DE CONTRASEÑA
+// Respuesta siempre genérica (nunca revela si el correo existe) — evita que alguien use este
+// endpoint para averiguar qué correos están registrados.
+// ⚠️ Todavía no hay un servicio de correo conectado: el enlace se imprime en los logs del
+// servidor por ahora. Falta wire-up real de envío de correo para producción.
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (user) {
+      const token = randomBytes(32).toString('hex');
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetTokenHash: hashToken(token),
+          resetTokenExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+        },
+      });
+
+      // TODO: reemplazar por un correo real (Resend, SendGrid, etc.) cuando se configure.
+      console.log(`[reset-password] Token para ${email} (vence en 30 min): ${token}`);
+    }
+
+    res.json({
+      message: 'Si el correo está registrado, recibirás instrucciones para recuperar tu contraseña.',
+    });
+  } catch (error) {
+    console.error('Error al solicitar recuperación de contraseña:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+// CONFIRMAR RECUPERACIÓN DE CONTRASEÑA CON EL TOKEN
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, newPassword } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { resetTokenHash: hashToken(token) } });
+
+    if (!user || !user.resetTokenExpiresAt || user.resetTokenExpiresAt < new Date()) {
+      res.status(400).json({ error: 'El enlace de recuperación es inválido o ya venció. Solicita uno nuevo.' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword, resetTokenHash: null, resetTokenExpiresAt: null },
+    });
+
+    res.json({ message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
+  } catch (error) {
+    console.error('Error al restablecer contraseña:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 };

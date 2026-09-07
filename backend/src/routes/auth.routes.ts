@@ -1,9 +1,16 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { register, registerByFolio, login, changePassword } from '../controllers/auth.controller';
+import { register, registerByFolio, login, changePassword, forgotPassword, resetPassword } from '../controllers/auth.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 import { validateBody } from '../middlewares/validate';
-import { registerSchema, registerByFolioSchema, loginSchema, changePasswordSchema } from '../schemas/auth.schema';
+import {
+  registerSchema,
+  registerByFolioSchema,
+  loginSchema,
+  changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from '../schemas/auth.schema';
 
 const router = Router();
 
@@ -20,5 +27,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), register);
 router.post('/register-folio', authLimiter, validateBody(registerByFolioSchema), registerByFolio);
 router.post('/login', authLimiter, validateBody(loginSchema), login);
 router.put('/change-password', authenticateToken, validateBody(changePasswordSchema), changePassword);
+router.post('/forgot-password', authLimiter, validateBody(forgotPasswordSchema), forgotPassword);
+router.post('/reset-password', authLimiter, validateBody(resetPasswordSchema), resetPassword);
 
 export default router;

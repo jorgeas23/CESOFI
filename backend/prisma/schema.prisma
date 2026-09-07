@@ -24,6 +24,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Recuperación de contraseña: token de un solo uso con vencimiento, nunca la contraseña
+  // en texto plano. Se limpia (null) al usarse o al vencer.
+  resetTokenHash      String?   @unique
+  resetTokenExpiresAt DateTime?
+
   company Company?
 }
 
@@ -144,6 +149,10 @@ model Evidence {
   // al que corresponde esta evidencia. No es una FK real porque los pasos no viven en esta
   // base — son dinámicos — pero es lo que nos deja marcar un paso como cumplido.
   pasoId     String?
+
+  // Puntos que otorga el paso (su "impactoEnPuntaje"), capturados al momento de subir la
+  // evidencia — se suman a Company.points solo cuando se aprueba, una sola vez.
+  pointsReward Int?         @default(0)
 
   status     EvidenceStatus @default(PENDIENTE)
   feedback   String?

@@ -44,10 +44,27 @@ interface SupportMessageAdmin {
   company: { id: string; name: string; folioCesofi: string | null };
 }
 
+interface CompanyAdmin {
+  id: string;
+  name: string;
+  rfc: string | null;
+  folioCesofi: string | null;
+  points: number;
+  level: string;
+  createdAt: string;
+  user: { name: string; email: string };
+  _count: { evidences: number };
+}
+
 export default function AdminScreen() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
-  const [view, setView] = useState<'EVIDENCIAS' | 'MENSAJES'>('EVIDENCIAS');
+  const [view, setView] = useState<'EVIDENCIAS' | 'MENSAJES' | 'EMPRESARIOS'>('EVIDENCIAS');
+
+  // Directorio de empresarios
+  const [companies, setCompanies] = useState<CompanyAdmin[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+  const [companySearch, setCompanySearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [evidences, setEvidences] = useState<EvidenceAdmin[]>([]);
@@ -136,6 +153,40 @@ export default function AdminScreen() {
   useEffect(() => {
     if (!checkingAccess) fetchSupportMessages(supportFilter);
   }, [checkingAccess, supportFilter, fetchSupportMessages]);
+
+  const fetchCompanies = useCallback(async (isRefresh = false) => {
+    try {
+      isRefresh ? setRefreshing(true) : setLoadingCompanies(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/api/company/admin`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudieron cargar las empresas.');
+      setCompanies(data.companies || []);
+    } catch (error: any) {
+      console.error('Error al cargar empresas:', error);
+      Alert.alert('Error', error.message || 'Error de conexión con el servidor.');
+    } finally {
+      setLoadingCompanies(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!checkingAccess && view === 'EMPRESARIOS') fetchCompanies();
+  }, [checkingAccess, view, fetchCompanies]);
+
+  const filteredCompanies = companies.filter((c) => {
+    const q = companySearch.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      c.user.email.toLowerCase().includes(q) ||
+      (c.folioCesofi || '').toLowerCase().includes(q)
+    );
+  });
 
   const submitReply = async () => {
     if (!replyTarget || !replyText.trim()) {
@@ -235,14 +286,22 @@ export default function AdminScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => (view === 'EVIDENCIAS' ? fetchEvidences(filter, true) : fetchSupportMessages(supportFilter, true))}
+            onRefresh={() =>
+              view === 'EVIDENCIAS'
+                ? fetchEvidences(filter, true)
+                : view === 'MENSAJES'
+                ? fetchSupportMessages(supportFilter, true)
+                : fetchCompanies(true)
+            }
             colors={['#034123']}
             tintColor="#034123"
           />
         }
       >
         <View style={styles.topBanner}>
-          <Text style={styles.topTitle}>{view === 'EVIDENCIAS' ? 'DICTAMEN DE EVIDENCIAS' : 'MENSAJES DE SOPORTE'}</Text>
+          <Text style={styles.topTitle}>
+            {view === 'EVIDENCIAS' ? 'DICTAMEN DE EVIDENCIAS' : view === 'MENSAJES' ? 'MENSAJES DE SOPORTE' : 'DIRECTORIO DE EMPRESARIOS'}
+          </Text>
           <Ionicons name="shield-checkmark-outline" size={22} color="#034123" />
         </View>
 
@@ -257,7 +316,13 @@ export default function AdminScreen() {
             style={[styles.viewSwitchTab, view === 'MENSAJES' && styles.viewSwitchTabActive]}
             onPress={() => setView('MENSAJES')}
           >
-            <Text style={[styles.viewSwitchText, view === 'MENSAJES' && styles.viewSwitchTextActive]}>Mensajes de Soporte</Text>
+            <Text style={[styles.viewSwitchText, view === 'MENSAJES' && styles.viewSwitchTextActive]}>Mensajes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewSwitchTab, view === 'EMPRESARIOS' && styles.viewSwitchTabActive]}
+            onPress={() => setView('EMPRESARIOS')}
+          >
+            <Text style={[styles.viewSwitchText, view === 'EMPRESARIOS' && styles.viewSwitchTextActive]}>Empresarios</Text>
           </TouchableOpacity>
         </View>
 
@@ -357,7 +422,7 @@ export default function AdminScreen() {
           </View>
         )}
         </>
-        ) : (
+        ) : view === 'MENSAJES' ? (
         <>
         <View style={styles.filterRow}>
           {(['PENDIENTE', 'RESPONDIDO', 'TODOS'] as const).map((f) => (
@@ -415,6 +480,58 @@ export default function AdminScreen() {
                     <Text style={[styles.statusBadgeText, { color: '#15803D' }]}>RESPONDIDO</Text>
                   </View>
                 )}
+              </View>
+            ))}
+          </View>
+        )}
+        </>
+        ) : (
+        <>
+        <View style={styles.searchWrapper}>
+          <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar por nombre, correo o folio..."
+            placeholderTextColor="#94A3B8"
+            value={companySearch}
+            onChangeText={setCompanySearch}
+          />
+        </View>
+
+        {loadingCompanies ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#034123" />
+          </View>
+        ) : filteredCompanies.length === 0 ? (
+          <View style={styles.loadingBox}>
+            <Ionicons name="business-outline" size={32} color="#94A3B8" />
+            <Text style={styles.emptyText}>No hay empresarios que coincidan.</Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {filteredCompanies.map((c) => (
+              <View key={c.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.companyName}>{c.name}</Text>
+                  {c.folioCesofi && <Text style={styles.folioText}>{c.folioCesofi}</Text>}
+                </View>
+                <Text style={styles.metaText}>{c.user.name} • {c.user.email}</Text>
+                {c.rfc && <Text style={styles.metaText}>RFC: {c.rfc}</Text>}
+                <View style={styles.companyStatsRow}>
+                  <View style={styles.companyStatBadge}>
+                    <Ionicons name="star" size={12} color="#EAB308" />
+                    <Text style={styles.companyStatText}>{c.points} pts</Text>
+                  </View>
+                  <View style={styles.companyStatBadge}>
+                    <Ionicons name="ribbon-outline" size={12} color="#034123" />
+                    <Text style={styles.companyStatText}>{c.level}</Text>
+                  </View>
+                  <View style={styles.companyStatBadge}>
+                    <Ionicons name="folder-outline" size={12} color="#64748B" />
+                    <Text style={styles.companyStatText}>{c._count.evidences} evidencias</Text>
+                  </View>
+                </View>
+                <Text style={styles.metaText}>Registrado: {new Date(c.createdAt).toLocaleDateString()}</Text>
               </View>
             ))}
           </View>
@@ -562,6 +679,21 @@ const styles = StyleSheet.create({
     color: '#475569',
     marginBottom: 4,
   },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginBottom: 16,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
+  companyStatsRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 8, marginBottom: 4 },
+  companyStatBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  companyStatText: { fontSize: 11, fontWeight: '600', color: '#334155' },
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
   filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: '#E2E8F0' },
   activeFilterChip: { backgroundColor: '#034123' },

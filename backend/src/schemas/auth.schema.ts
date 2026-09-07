@@ -18,6 +18,15 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(6, 'La nueva contraseña debe tener al menos 6 caracteres'),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email('Correo electrónico inválido'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(1, 'El enlace de recuperación es inválido'),
+  newPassword: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+});
+
 // Registro para empresarios que ya tienen un Folio de Atención CESOFI en SIDEC:
 // el nombre/RFC de la empresa se toman de SIDEC, no se piden a mano.
 export const registerByFolioSchema = z.object({
