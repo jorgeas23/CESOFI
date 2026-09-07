@@ -158,7 +158,7 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
                   {userName || 'Usuario'}
                 </Text>
                 <Text style={styles.userCompany} numberOfLines={1}>
-                  {userCompany || 'Empresa CESOFI'}
+                  {isAdmin ? 'Administrador CESOFI' : userCompany || 'Empresa CESOFI'}
                 </Text>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeButton}>

@@ -63,6 +63,9 @@ export default function LoginScreen() {
       }
       if (data.user && data.user.company && data.user.company.name) {
         await AsyncStorage.setItem('userCompany', data.user.company.name);
+      } else {
+        // Sin empresa (ej. un admin) — no dejar el nombre de la empresa de una sesión anterior.
+        await AsyncStorage.removeItem('userCompany');
       }
       if (data.user && data.user.role) {
         await AsyncStorage.setItem('userRole', data.user.role);
