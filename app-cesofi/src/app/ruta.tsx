@@ -37,6 +37,22 @@ interface Recomendacion {
   justificacion: string;
 }
 
+interface Riesgo {
+  categoria: string;
+  descripcion: string;
+  nivel: string;
+}
+
+interface CreditoRecomendado {
+  nombreProducto: string;
+  institucion?: string;
+  montoSugerido?: string;
+  plazoSugerido?: string;
+  tasaEstimada?: string;
+  justificacion?: string;
+  requisitosFaltantes?: string[];
+}
+
 interface RutaResponse {
   linked: boolean;
   found?: boolean;
@@ -48,6 +64,8 @@ interface RutaResponse {
   resultado?: { nivel: number; puntajeTotal: number; dscr: number; esViable: boolean };
   diagnosticoIA?: {
     resumenGeneral: string;
+    fortalezas?: string[];
+    riesgos?: Riesgo[];
     accionesCriticas?: string[];
     recomendaciones?: Recomendacion[];
     planMejoraNivel: {
@@ -56,6 +74,7 @@ interface RutaResponse {
       tiempoEstimado: string;
       pasos: Paso[];
     };
+    creditoRecomendado?: CreditoRecomendado;
   } | null;
 }
 
@@ -239,6 +258,41 @@ export default function RutaScreen() {
               )}
             </View>
 
+            {/* Fortalezas */}
+            {diagnostico.fortalezas && diagnostico.fortalezas.length > 0 && (
+              <View style={styles.strengthCard}>
+                <Text style={styles.strengthTitle}>💪 Fortalezas de tu negocio</Text>
+                {diagnostico.fortalezas.map((f, index) => (
+                  <View key={index} style={styles.strengthRow}>
+                    <Ionicons name="checkmark-circle" size={16} color="#15803D" />
+                    <Text style={styles.strengthText}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Riesgos identificados */}
+            {diagnostico.riesgos && diagnostico.riesgos.length > 0 && (
+              <View style={styles.riskCard}>
+                <Text style={styles.riskTitle}>Riesgos identificados</Text>
+                {diagnostico.riesgos.map((riesgo, index) => {
+                  const color = riesgo.nivel === 'CRÍTICO' ? '#B91C1C' : riesgo.nivel === 'ALTO' ? '#C2410C' : '#B45309';
+                  const bg = riesgo.nivel === 'CRÍTICO' ? '#FEE2E2' : riesgo.nivel === 'ALTO' ? '#FFEDD5' : '#FEF3C7';
+                  return (
+                    <View key={index} style={styles.riskRow}>
+                      <View style={styles.riskHeaderRow}>
+                        <View style={[styles.riskBadge, { backgroundColor: bg }]}>
+                          <Text style={[styles.riskBadgeText, { color }]}>{riesgo.nivel}</Text>
+                        </View>
+                        <Text style={styles.riskCategoria}>{riesgo.categoria}</Text>
+                      </View>
+                      <Text style={styles.riskDescripcion}>{riesgo.descripcion}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
             {/* Acciones críticas */}
             {diagnostico.accionesCriticas && diagnostico.accionesCriticas.length > 0 && (
               <View style={styles.criticalCard}>
@@ -316,6 +370,51 @@ export default function RutaScreen() {
                     {rec.enlace && <Ionicons name="open-outline" size={18} color="#94A3B8" />}
                   </TouchableOpacity>
                 ))}
+              </View>
+            )}
+
+            {/* Crédito recomendado */}
+            {diagnostico.creditoRecomendado && (
+              <View style={styles.creditCard}>
+                <View style={styles.creditHeaderRow}>
+                  <Ionicons name="cash-outline" size={20} color="#034123" />
+                  <Text style={styles.creditTitle}>Crédito recomendado para ti</Text>
+                </View>
+                <Text style={styles.creditProducto}>{diagnostico.creditoRecomendado.nombreProducto}</Text>
+                {diagnostico.creditoRecomendado.institucion && (
+                  <Text style={styles.creditInstitucion}>{diagnostico.creditoRecomendado.institucion}</Text>
+                )}
+                <View style={styles.creditTagsRow}>
+                  {diagnostico.creditoRecomendado.montoSugerido && (
+                    <View style={styles.tag}>
+                      <Text style={styles.tagText}>{diagnostico.creditoRecomendado.montoSugerido}</Text>
+                    </View>
+                  )}
+                  {diagnostico.creditoRecomendado.plazoSugerido && (
+                    <View style={styles.tag}>
+                      <Text style={styles.tagText}>{diagnostico.creditoRecomendado.plazoSugerido}</Text>
+                    </View>
+                  )}
+                  {diagnostico.creditoRecomendado.tasaEstimada && (
+                    <View style={styles.tag}>
+                      <Text style={styles.tagText}>{diagnostico.creditoRecomendado.tasaEstimada}</Text>
+                    </View>
+                  )}
+                </View>
+                {diagnostico.creditoRecomendado.justificacion && (
+                  <Text style={styles.resumenText}>{diagnostico.creditoRecomendado.justificacion}</Text>
+                )}
+                {diagnostico.creditoRecomendado.requisitosFaltantes && diagnostico.creditoRecomendado.requisitosFaltantes.length > 0 && (
+                  <View style={styles.creditReqBox}>
+                    <Text style={styles.creditReqTitle}>Te falta para calificar:</Text>
+                    {diagnostico.creditoRecomendado.requisitosFaltantes.map((req, index) => (
+                      <View key={index} style={styles.criticalRow}>
+                        <Ionicons name="ellipse" size={6} color="#B45309" style={{ marginTop: 6 }} />
+                        <Text style={styles.criticalText}>{req}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
             )}
           </>
@@ -485,6 +584,126 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     paddingTop: 12,
+  },
+  strengthCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  strengthTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#15803D',
+    marginBottom: 10,
+  },
+  strengthRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 6,
+  },
+  strengthText: {
+    fontSize: 12,
+    color: '#166534',
+    flex: 1,
+    lineHeight: 17,
+  },
+  riskCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  riskTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    marginBottom: 10,
+  },
+  riskRow: {
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  riskHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  riskBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  riskBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  riskCategoria: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    flex: 1,
+  },
+  riskDescripcion: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+  },
+  creditCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  creditHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  creditTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  creditProducto: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#034123',
+  },
+  creditInstitucion: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  creditTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  creditReqBox: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+  },
+  creditReqTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#92400E',
+    marginBottom: 6,
   },
   criticalCard: {
     backgroundColor: '#FEF3C7',

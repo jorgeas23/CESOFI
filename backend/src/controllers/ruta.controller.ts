@@ -1,8 +1,9 @@
 import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { obtenerDiagnosticoPorFolio, DiagnosticoApiError, isDiagnosticoApiConfigured } from '../lib/diagnosticoApi';
+import { DiagnosticoRespuesta, obtenerDiagnosticoPorFolio, DiagnosticoApiError, isDiagnosticoApiConfigured } from '../lib/diagnosticoApi';
 import { PLAN_POR_NIVEL } from '../data/planPorNivel';
+import { mapCasoADiagnostico } from '../lib/mapCasoDiagnostico';
 
 // Obtiene la Ruta CESOFI (plan de mejora, acciones críticas y recomendaciones/capacitaciones)
 // consultando la API externa del Sistema de Diagnóstico Financiero con el folio vinculado
@@ -32,7 +33,19 @@ export const getRuta = async (req: AuthenticatedRequest, res: Response): Promise
       return;
     }
 
-    const diagnostico = await obtenerDiagnosticoPorFolio(company.folioCesofi);
+    // 1. ¿Ya nos llegó este folio por push (POST /api/externo/casos)? Es la fuente más rica y
+    //    específica del negocio (riesgos, fortalezas, crédito recomendado), así que tiene
+    //    prioridad sobre la API de "jalar" cuando existe.
+    const casoPush = await prisma.diagnosticoCaso.findUnique({ where: { folio: company.folioCesofi } });
+
+    let diagnostico: DiagnosticoRespuesta | null = casoPush ? mapCasoADiagnostico(casoPush) : null;
+    let fuente: 'push' | 'pull' | null = casoPush ? 'push' : null;
+
+    // 2. Si no hay nada por push, intentamos la API de "jalar" de SIDEC.
+    if (!diagnostico) {
+      diagnostico = await obtenerDiagnosticoPorFolio(company.folioCesofi);
+      if (diagnostico) fuente = 'pull';
+    }
 
     if (!diagnostico) {
       res.json({
@@ -49,7 +62,7 @@ export const getRuta = async (req: AuthenticatedRequest, res: Response): Promise
     let diagnosticoIA = diagnostico.diagnosticoIA;
     let generadoPorCesofi = false;
 
-    if (!diagnosticoIA && diagnostico.resultado) {
+    if ((!diagnosticoIA || !diagnosticoIA.planMejoraNivel?.pasos?.length) && diagnostico.resultado) {
       const plantilla = PLAN_POR_NIVEL[diagnostico.resultado.nivel];
       if (plantilla) {
         diagnosticoIA = {
@@ -70,6 +83,7 @@ export const getRuta = async (req: AuthenticatedRequest, res: Response): Promise
     res.json({
       linked: true,
       found: true,
+      fuente,
       ...diagnostico,
       diagnosticoIA,
       generadoPorCesofi,

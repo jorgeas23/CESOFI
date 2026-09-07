@@ -19,6 +19,8 @@ export interface DiagnosticoRespuesta {
   actualizadoEn: string;
   diagnosticoIA: {
     resumenGeneral: string;
+    fortalezas?: string[];
+    riesgos?: Array<{ categoria: string; descripcion: string; nivel: string }>;
     accionesCriticas?: string[];
     recomendaciones?: Array<{
       recomendacionId: string;
@@ -42,6 +44,15 @@ export interface DiagnosticoRespuesta {
         recursos: string;
         plazo: string;
       }>;
+    };
+    creditoRecomendado?: {
+      nombreProducto: string;
+      institucion?: string;
+      montoSugerido?: string;
+      plazoSugerido?: string;
+      tasaEstimada?: string;
+      justificacion?: string;
+      requisitosFaltantes?: string[];
     };
     editadoPorAsesor?: boolean;
     fechaEdicionManual?: string;
