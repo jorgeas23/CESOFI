@@ -68,11 +68,14 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('userRole', data.user.role);
       }
 
+      // Un administrador no es un empresario: va directo a su panel, nunca al dashboard.
+      const destino = data.user?.role === 'ADMIN' ? '/admin' : '/';
+
       // Mostrar mensaje de éxito brevemente antes de navegar
       setLoadingMessage('¡Bienvenido! Cargando tu cuenta...');
       setTimeout(() => {
         setLoading(false);
-        router.replace('/');
+        router.replace(destino);
       }, 700);
 
     } catch (error: any) {

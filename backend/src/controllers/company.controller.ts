@@ -30,10 +30,16 @@ export const getCompanyProfile = async (
     });
 
     // Si por alguna razón el usuario no tiene empresa vinculada, se crea una por defecto
+    // (nunca para un ADMIN: no es un empresario, no debe tener una empresa fantasma).
     if (!company) {
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) {
         res.status(404).json({ error: 'Usuario no encontrado' });
+        return;
+      }
+
+      if (user.role === 'ADMIN') {
+        res.status(404).json({ error: 'Los administradores no tienen un perfil de empresa' });
         return;
       }
 

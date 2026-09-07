@@ -73,6 +73,10 @@ export const Header: React.FC<HeaderProps> = ({
         const token = await AsyncStorage.getItem('token');
         if (!token) return;
 
+        // Un admin no tiene empresa ni evidencias propias — nada que notificarle aquí.
+        const role = await AsyncStorage.getItem('userRole');
+        if (role === 'ADMIN') return;
+
         const response = await fetch(`${API_URL}/api/evidence`, {
           headers: { Authorization: `Bearer ${token}` },
         });

@@ -71,27 +71,22 @@ export const CustomDrawer: React.FC<CustomDrawerProps> = ({
     }
   }, [visible, propUser, propInitials]);
 
-  // Lista de opciones actualizada con "Mi empresa" y mejor ícono para "Mis logros"
-  const menuItems = [
-    { id: 'index', label: 'Dashboard', lib: 'ionicons', icon: 'home-outline', route: '/' },
-    { id: 'mi-empresa', label: 'Mi empresa', lib: 'ionicons', icon: 'business-outline', route: '/mi-empresa' },
-    { id: 'ruta', label: 'Mi ruta', lib: 'fa5', icon: 'route', route: '/ruta' },
-    { id: 'evidencias', label: 'Evidencias', lib: 'ionicons', icon: 'folder-outline', route: '/evidencias' },
-    { id: 'citas', label: 'Citas y Asesorías', lib: 'ionicons', icon: 'calendar-outline', route: '/citas' },
-    { id: 'capacitaciones', label: 'Capacitaciones', lib: 'ionicons', icon: 'school-outline', route: '/capacitaciones' },
-    { id: 'logros', label: 'Mis logros', lib: 'ionicons', icon: 'ribbon-outline', route: '/logros' },
-    { id: 'ayuda', label: 'Ayuda', lib: 'ionicons', icon: 'help-circle-outline', route: '/ayuda' },
-  ];
-
-  if (isAdmin) {
-    menuItems.push({
-      id: 'admin',
-      label: 'Administración',
-      lib: 'ionicons',
-      icon: 'shield-checkmark-outline',
-      route: '/admin',
-    });
-  }
+  // Un administrador no es un empresario: no tiene empresa, ruta, evidencias ni logros
+  // propios — su menú es completamente distinto, no una extensión del de empresario.
+  const menuItems = isAdmin
+    ? [
+        { id: 'admin', label: 'Administración', lib: 'ionicons', icon: 'shield-checkmark-outline', route: '/admin' },
+      ]
+    : [
+        { id: 'index', label: 'Dashboard', lib: 'ionicons', icon: 'home-outline', route: '/' },
+        { id: 'mi-empresa', label: 'Mi empresa', lib: 'ionicons', icon: 'business-outline', route: '/mi-empresa' },
+        { id: 'ruta', label: 'Mi ruta', lib: 'fa5', icon: 'route', route: '/ruta' },
+        { id: 'evidencias', label: 'Evidencias', lib: 'ionicons', icon: 'folder-outline', route: '/evidencias' },
+        { id: 'citas', label: 'Citas y Asesorías', lib: 'ionicons', icon: 'calendar-outline', route: '/citas' },
+        { id: 'capacitaciones', label: 'Capacitaciones', lib: 'ionicons', icon: 'school-outline', route: '/capacitaciones' },
+        { id: 'logros', label: 'Mis logros', lib: 'ionicons', icon: 'ribbon-outline', route: '/logros' },
+        { id: 'ayuda', label: 'Ayuda', lib: 'ionicons', icon: 'help-circle-outline', route: '/ayuda' },
+      ];
 
   const moduleLabels: Record<string, string> = {
     '/': 'Cargando Dashboard...',

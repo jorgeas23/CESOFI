@@ -89,6 +89,13 @@ export default function HomeScreen() {
         return;
       }
 
+      // Un administrador no es un empresario: no tiene dashboard aquí, su panel es /admin.
+      const role = await AsyncStorage.getItem('userRole');
+      if (role === 'ADMIN') {
+        router.replace('/admin');
+        return;
+      }
+
       const storedName = await AsyncStorage.getItem('userName');
       const storedCompany = await AsyncStorage.getItem('userCompany');
 
