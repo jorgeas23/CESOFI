@@ -43,16 +43,6 @@ interface Riesgo {
   nivel: string;
 }
 
-interface CreditoRecomendado {
-  nombreProducto: string;
-  institucion?: string;
-  montoSugerido?: string;
-  plazoSugerido?: string;
-  tasaEstimada?: string;
-  justificacion?: string;
-  requisitosFaltantes?: string[];
-}
-
 interface RutaResponse {
   linked: boolean;
   found?: boolean;
@@ -74,7 +64,6 @@ interface RutaResponse {
       tiempoEstimado: string;
       pasos: Paso[];
     };
-    creditoRecomendado?: CreditoRecomendado;
   } | null;
 }
 
@@ -370,51 +359,6 @@ export default function RutaScreen() {
                     {rec.enlace && <Ionicons name="open-outline" size={18} color="#94A3B8" />}
                   </TouchableOpacity>
                 ))}
-              </View>
-            )}
-
-            {/* Crédito recomendado */}
-            {diagnostico.creditoRecomendado && (
-              <View style={styles.creditCard}>
-                <View style={styles.creditHeaderRow}>
-                  <Ionicons name="cash-outline" size={20} color="#034123" />
-                  <Text style={styles.creditTitle}>Crédito recomendado para ti</Text>
-                </View>
-                <Text style={styles.creditProducto}>{diagnostico.creditoRecomendado.nombreProducto}</Text>
-                {diagnostico.creditoRecomendado.institucion && (
-                  <Text style={styles.creditInstitucion}>{diagnostico.creditoRecomendado.institucion}</Text>
-                )}
-                <View style={styles.creditTagsRow}>
-                  {diagnostico.creditoRecomendado.montoSugerido && (
-                    <View style={styles.tag}>
-                      <Text style={styles.tagText}>{diagnostico.creditoRecomendado.montoSugerido}</Text>
-                    </View>
-                  )}
-                  {diagnostico.creditoRecomendado.plazoSugerido && (
-                    <View style={styles.tag}>
-                      <Text style={styles.tagText}>{diagnostico.creditoRecomendado.plazoSugerido}</Text>
-                    </View>
-                  )}
-                  {diagnostico.creditoRecomendado.tasaEstimada && (
-                    <View style={styles.tag}>
-                      <Text style={styles.tagText}>{diagnostico.creditoRecomendado.tasaEstimada}</Text>
-                    </View>
-                  )}
-                </View>
-                {diagnostico.creditoRecomendado.justificacion && (
-                  <Text style={styles.resumenText}>{diagnostico.creditoRecomendado.justificacion}</Text>
-                )}
-                {diagnostico.creditoRecomendado.requisitosFaltantes && diagnostico.creditoRecomendado.requisitosFaltantes.length > 0 && (
-                  <View style={styles.creditReqBox}>
-                    <Text style={styles.creditReqTitle}>Te falta para calificar:</Text>
-                    {diagnostico.creditoRecomendado.requisitosFaltantes.map((req, index) => (
-                      <View key={index} style={styles.criticalRow}>
-                        <Ionicons name="ellipse" size={6} color="#B45309" style={{ marginTop: 6 }} />
-                        <Text style={styles.criticalText}>{req}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
               </View>
             )}
           </>

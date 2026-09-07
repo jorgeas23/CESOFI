@@ -45,15 +45,6 @@ export interface DiagnosticoRespuesta {
         plazo: string;
       }>;
     };
-    creditoRecomendado?: {
-      nombreProducto: string;
-      institucion?: string;
-      montoSugerido?: string;
-      plazoSugerido?: string;
-      tasaEstimada?: string;
-      justificacion?: string;
-      requisitosFaltantes?: string[];
-    };
     editadoPorAsesor?: boolean;
     fechaEdicionManual?: string;
   } | null;

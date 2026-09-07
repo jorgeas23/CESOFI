@@ -72,17 +72,6 @@ export function mapCasoADiagnostico(caso: DiagnosticoCaso): DiagnosticoRespuesta
           plazo: p.plazo,
         })),
       },
-      creditoRecomendado: diagnostico.creditoRecomendado
-        ? {
-            nombreProducto: diagnostico.creditoRecomendado.nombreProducto,
-            institucion: diagnostico.creditoRecomendado.institucion,
-            montoSugerido: diagnostico.creditoRecomendado.montoSugerido,
-            plazoSugerido: diagnostico.creditoRecomendado.plazoSugerido,
-            tasaEstimada: diagnostico.creditoRecomendado.tasaEstimada,
-            justificacion: diagnostico.creditoRecomendado.justificacion,
-            requisitosFaltantes: diagnostico.creditoRecomendado.requisitosFaltantes,
-          }
-        : undefined,
       editadoPorAsesor: diagnostico.editadoPorAsesor,
     },
   };
