@@ -37,6 +37,7 @@ import evidenceRoutes from './routes/evidence.routes';
 import rutaRoutes from './routes/ruta.routes';
 import externoRoutes from './routes/externo.routes';
 import supportRoutes from './routes/support.routes';
+import reportesRoutes from './routes/reportes.routes';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/company', companyRoutes);
@@ -44,6 +45,7 @@ app.use('/api/evidence', evidenceRoutes);
 app.use('/api/ruta', rutaRoutes);
 app.use('/api/externo', externoRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/reportes', reportesRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

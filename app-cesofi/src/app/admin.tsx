@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Linking,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -90,7 +91,8 @@ interface RutaAdmin {
 export default function AdminScreen() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
-  const [view, setView] = useState<'EVIDENCIAS' | 'MENSAJES' | 'EMPRESARIOS'>('EVIDENCIAS');
+  const [view, setView] = useState<'EVIDENCIAS' | 'MENSAJES' | 'EMPRESARIOS' | 'REPORTES'>('EVIDENCIAS');
+  const [downloading, setDownloading] = useState<'excel' | 'pdf' | null>(null);
 
   // Directorio de empresarios
   const [companies, setCompanies] = useState<CompanyAdmin[]>([]);
@@ -383,6 +385,52 @@ export default function AdminScreen() {
     }
   };
 
+  const descargarReporte = async (tipo: 'excel' | 'pdf') => {
+    try {
+      setDownloading(tipo);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const url = `${API_URL}/api/reportes/${tipo}`;
+
+      if (Platform.OS !== 'web') {
+        // Por ahora la descarga vive en la versión web (cesofi.vercel.app en una computadora
+        // o navegador) — evita agregar un flujo nativo de guardado/compartido aparte.
+        Alert.alert(
+          'Descarga disponible en la web',
+          'Por ahora descarga los reportes desde cesofi.vercel.app en una computadora o navegador.'
+        );
+        return;
+      }
+
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'No se pudo generar el reporte.');
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : `cesofi-reporte.${tipo === 'excel' ? 'xlsx' : 'pdf'}`;
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+      console.error('Error al descargar reporte:', error);
+      Alert.alert('Error', error.message || 'No se pudo descargar el reporte.');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   const handleLogout = async () => {
     await clearSession();
     router.replace('/login');
@@ -421,7 +469,13 @@ export default function AdminScreen() {
       >
         <View style={styles.topBanner}>
           <Text style={styles.topTitle}>
-            {view === 'EVIDENCIAS' ? 'DICTAMEN DE EVIDENCIAS' : view === 'MENSAJES' ? 'MENSAJES DE SOPORTE' : 'DIRECTORIO DE EMPRESARIOS'}
+            {view === 'EVIDENCIAS'
+              ? 'DICTAMEN DE EVIDENCIAS'
+              : view === 'MENSAJES'
+              ? 'MENSAJES DE SOPORTE'
+              : view === 'EMPRESARIOS'
+              ? 'DIRECTORIO DE EMPRESARIOS'
+              : 'REPORTES'}
           </Text>
           <Ionicons name="shield-checkmark-outline" size={22} color="#034123" />
         </View>
@@ -444,6 +498,12 @@ export default function AdminScreen() {
             onPress={() => setView('EMPRESARIOS')}
           >
             <Text style={[styles.viewSwitchText, view === 'EMPRESARIOS' && styles.viewSwitchTextActive]}>Empresarios</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewSwitchTab, view === 'REPORTES' && styles.viewSwitchTabActive]}
+            onPress={() => setView('REPORTES')}
+          >
+            <Text style={[styles.viewSwitchText, view === 'REPORTES' && styles.viewSwitchTextActive]}>Reportes</Text>
           </TouchableOpacity>
         </View>
 
@@ -612,7 +672,7 @@ export default function AdminScreen() {
           </View>
         )}
         </>
-        ) : (
+        ) : view === 'EMPRESARIOS' ? (
         <>
         <View style={styles.searchWrapper}>
           <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
@@ -669,6 +729,64 @@ export default function AdminScreen() {
             ))}
           </View>
         )}
+        </>
+        ) : (
+        <>
+        <View style={styles.reportIntroCard}>
+          <Ionicons name="document-text-outline" size={22} color="#034123" />
+          <Text style={styles.reportIntroText}>
+            Descarga los datos de todas las empresas registradas: perfil, folio, nivel, puntos,
+            avance de pasos de su Ruta y cada evidencia que han subido.
+          </Text>
+        </View>
+
+        <View style={styles.reportCardsRow}>
+          <TouchableOpacity
+            style={styles.reportCard}
+            onPress={() => descargarReporte('excel')}
+            disabled={downloading !== null}
+          >
+            <View style={[styles.reportIconBg, { backgroundColor: '#E6F4EA' }]}>
+              {downloading === 'excel' ? (
+                <ActivityIndicator size="small" color="#034123" />
+              ) : (
+                <MaterialCommunityIcons name="file-excel-outline" size={26} color="#034123" />
+              )}
+            </View>
+            <Text style={styles.reportCardTitle}>Reporte en Excel</Text>
+            <Text style={styles.reportCardSub}>Hoja "Empresas" (datos y avance) + hoja "Evidencias" (documento por documento)</Text>
+            <View style={styles.reportDownloadRow}>
+              <Ionicons name="download-outline" size={14} color="#034123" />
+              <Text style={styles.reportDownloadText}>Descargar .xlsx</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.reportCard}
+            onPress={() => descargarReporte('pdf')}
+            disabled={downloading !== null}
+          >
+            <View style={[styles.reportIconBg, { backgroundColor: '#FEF3C7' }]}>
+              {downloading === 'pdf' ? (
+                <ActivityIndicator size="small" color="#B45309" />
+              ) : (
+                <MaterialCommunityIcons name="file-pdf-box" size={26} color="#B45309" />
+              )}
+            </View>
+            <Text style={styles.reportCardTitle}>Reporte en PDF</Text>
+            <Text style={styles.reportCardSub}>Tabla resumen por empresa + detalle de evidencia subida por paso, listo para imprimir</Text>
+            <View style={styles.reportDownloadRow}>
+              <Ionicons name="download-outline" size={14} color="#034123" />
+              <Text style={styles.reportDownloadText}>Descargar .pdf</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.reportFootnote}>
+          El nivel y los pasos de la Ruta se calculan con el diagnóstico que ya tenemos guardado de
+          SIDEC (el que llega por push). Si una empresa aún no tiene diagnóstico vinculado, esas
+          columnas quedan vacías en vez de detener el reporte.
+        </Text>
         </>
         )}
 
@@ -1185,4 +1303,47 @@ const styles = StyleSheet.create({
   pendingValidationActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   validateRejectButton: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5' },
   validateApproveButton: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#034123' },
+
+  // Reportes
+  reportIntroCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginBottom: 18,
+  },
+  reportIntroText: { flex: 1, fontSize: 12.5, color: '#166534', lineHeight: 18 },
+  reportCardsRow: { gap: 14 },
+  reportCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reportIconBg: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reportCardTitle: { fontSize: 15, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  reportCardSub: { fontSize: 12, color: '#64748B', lineHeight: 17, marginBottom: 14 },
+  reportDownloadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    paddingVertical: 10,
+  },
+  reportDownloadText: { fontSize: 13, fontWeight: 'bold', color: '#034123' },
+  reportFootnote: { fontSize: 11, color: '#94A3B8', lineHeight: 16, marginTop: 18, textAlign: 'center' },
 });
