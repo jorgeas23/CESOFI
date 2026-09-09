@@ -48,12 +48,43 @@ interface CompanyAdmin {
   id: string;
   name: string;
   rfc: string | null;
+  phone: string | null;
+  address: string | null;
   folioCesofi: string | null;
   points: number;
   level: string;
   createdAt: string;
   user: { name: string; email: string };
   _count: { evidences: number };
+}
+
+interface PasoRuta {
+  id?: string;
+  orden: number;
+  titulo: string;
+  descripcion: string;
+  area: string;
+  impactoEnPuntaje?: string;
+  recursos: string;
+  plazo: string;
+}
+
+interface RutaAdmin {
+  linked: boolean;
+  found?: boolean;
+  message?: string;
+  generadoPorCesofi?: boolean;
+  resultado?: { nivel: number; puntajeTotal: number; dscr: number; esViable: boolean };
+  negocio?: { rfc: string | null; nombreNegocio: string };
+  diagnosticoIA?: {
+    resumenGeneral: string;
+    planMejoraNivel: {
+      nivelActual: number;
+      nivelObjetivo: number;
+      tiempoEstimado: string;
+      pasos: PasoRuta[];
+    };
+  } | null;
 }
 
 export default function AdminScreen() {
@@ -83,6 +114,12 @@ export default function AdminScreen() {
   const [decision, setDecision] = useState<'APROBADO' | 'RECHAZADO' | null>(null);
   const [feedback, setFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Detalle de empresa: datos + su Ruta + evidencia cruzada por paso
+  const [companyDetail, setCompanyDetail] = useState<CompanyAdmin | null>(null);
+  const [companyRuta, setCompanyRuta] = useState<RutaAdmin | null>(null);
+  const [companyEvidences, setCompanyEvidences] = useState<EvidenceAdmin[]>([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   const fetchEvidences = useCallback(async (status: string, isRefresh = false) => {
     try {
@@ -179,6 +216,61 @@ export default function AdminScreen() {
     if (!checkingAccess && view === 'EMPRESARIOS') fetchCompanies();
   }, [checkingAccess, view, fetchCompanies]);
 
+  // Vuelve a cargar solo la evidencia de la empresa cuyo detalle está abierto (tras dictaminar)
+  const refreshCompanyEvidences = useCallback(async (companyId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+      const response = await fetch(`${API_URL}/api/evidence/admin?status=TODAS&companyId=${companyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (response.ok) setCompanyEvidences(data.evidences || []);
+    } catch (error) {
+      console.error('Error al refrescar evidencias de la empresa:', error);
+    }
+  }, []);
+
+  const openCompanyDetail = useCallback(async (company: CompanyAdmin) => {
+    setCompanyDetail(company);
+    setLoadingDetail(true);
+    setCompanyRuta(null);
+    setCompanyEvidences([]);
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const [rutaRes, evRes] = await Promise.all([
+        fetch(`${API_URL}/api/ruta/admin/${company.id}`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/evidence/admin?status=TODAS&companyId=${company.id}`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      const rutaData = await rutaRes.json();
+      setCompanyRuta(rutaRes.ok ? rutaData : { linked: false, message: rutaData.error || 'No se pudo cargar la ruta.' });
+
+      const evData = await evRes.json();
+      if (evRes.ok) setCompanyEvidences(evData.evidences || []);
+    } catch (error) {
+      console.error('Error al cargar detalle de empresa:', error);
+      Alert.alert('Error', 'No se pudo cargar el detalle de esta empresa.');
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, []);
+
+  const closeCompanyDetail = () => {
+    setCompanyDetail(null);
+    setCompanyRuta(null);
+    setCompanyEvidences([]);
+  };
+
+  // La evidencia más reciente de este paso (companyEvidences viene ordenado por fecha asc)
+  const evidenciaDePasoAdmin = (pasoId?: string) => {
+    if (!pasoId) return undefined;
+    const candidatas = companyEvidences.filter((e) => e.pasoId === pasoId);
+    return candidatas[candidatas.length - 1];
+  };
+
   const filteredCompanies = companies.filter((c) => {
     const q = companySearch.toLowerCase();
     return (
@@ -254,6 +346,11 @@ export default function AdminScreen() {
       setSelected(null);
       setDecision(null);
       await fetchEvidences(filter);
+      // Si se dictaminó desde el detalle de una empresa, refrescar su evidencia ahí también
+      if (companyDetail) {
+        await refreshCompanyEvidences(companyDetail.id);
+        fetchCompanies(true); // puntos/nivel pudieron cambiar — refrescar en segundo plano
+      }
     } catch (error: any) {
       console.error('Error al dictaminar:', error);
       Alert.alert('Error', error.message || 'No se pudo procesar el dictamen.');
@@ -510,7 +607,7 @@ export default function AdminScreen() {
         ) : (
           <View style={styles.list}>
             {filteredCompanies.map((c) => (
-              <View key={c.id} style={styles.card}>
+              <TouchableOpacity key={c.id} style={styles.card} activeOpacity={0.7} onPress={() => openCompanyDetail(c)}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.companyName}>{c.name}</Text>
                   {c.folioCesofi && <Text style={styles.folioText}>{c.folioCesofi}</Text>}
@@ -531,8 +628,14 @@ export default function AdminScreen() {
                     <Text style={styles.companyStatText}>{c._count.evidences} evidencias</Text>
                   </View>
                 </View>
-                <Text style={styles.metaText}>Registrado: {new Date(c.createdAt).toLocaleDateString()}</Text>
-              </View>
+                <View style={styles.cardFooterRow}>
+                  <Text style={styles.metaText}>Registrado: {new Date(c.createdAt).toLocaleDateString()}</Text>
+                  <View style={styles.seeMoreRow}>
+                    <Text style={styles.seeMoreText}>Ver empresa y ruta</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#034123" />
+                  </View>
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -544,6 +647,181 @@ export default function AdminScreen() {
           <Text style={styles.logoutText}>Cerrar sesión</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Detalle de empresa: datos + su Ruta + la evidencia cruzada por paso */}
+      <Modal visible={!!companyDetail} animationType="slide" onRequestClose={closeCompanyDetail}>
+        <SafeAreaView style={styles.detailContainer}>
+          <View style={styles.detailHeader}>
+            <TouchableOpacity onPress={closeCompanyDetail} style={styles.detailBackButton}>
+              <Ionicons name="arrow-back" size={22} color="#0F172A" />
+            </TouchableOpacity>
+            <Text style={styles.detailHeaderTitle} numberOfLines={1}>{companyDetail?.name}</Text>
+            <View style={{ width: 22 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={styles.detailScroll}>
+            {/* Datos de la empresa */}
+            <View style={styles.detailInfoCard}>
+              <View style={styles.detailInfoHeaderRow}>
+                <Text style={styles.detailCompanyName}>{companyDetail?.name}</Text>
+                {companyDetail?.folioCesofi && (
+                  <View style={styles.folioBadge}>
+                    <Text style={styles.folioBadgeText}>{companyDetail.folioCesofi}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.detailInfoGrid}>
+                <View style={styles.detailInfoItem}>
+                  <Text style={styles.detailInfoLabel}>Contacto</Text>
+                  <Text style={styles.detailInfoValue}>{companyDetail?.user.name}</Text>
+                  <Text style={styles.detailInfoSub}>{companyDetail?.user.email}</Text>
+                </View>
+                <View style={styles.detailInfoItem}>
+                  <Text style={styles.detailInfoLabel}>RFC</Text>
+                  <Text style={styles.detailInfoValue}>{companyDetail?.rfc || '—'}</Text>
+                </View>
+                <View style={styles.detailInfoItem}>
+                  <Text style={styles.detailInfoLabel}>Teléfono</Text>
+                  <Text style={styles.detailInfoValue}>{companyDetail?.phone || '—'}</Text>
+                </View>
+                <View style={styles.detailInfoItem}>
+                  <Text style={styles.detailInfoLabel}>Dirección</Text>
+                  <Text style={styles.detailInfoValue}>{companyDetail?.address || '—'}</Text>
+                </View>
+              </View>
+              <View style={styles.companyStatsRow}>
+                <View style={styles.companyStatBadge}>
+                  <Ionicons name="star" size={12} color="#EAB308" />
+                  <Text style={styles.companyStatText}>{companyDetail?.points} pts</Text>
+                </View>
+                <View style={styles.companyStatBadge}>
+                  <Ionicons name="ribbon-outline" size={12} color="#034123" />
+                  <Text style={styles.companyStatText}>{companyDetail?.level}</Text>
+                </View>
+                <View style={styles.companyStatBadge}>
+                  <Ionicons name="calendar-outline" size={12} color="#64748B" />
+                  <Text style={styles.companyStatText}>
+                    Desde {companyDetail && new Date(companyDetail.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Su Ruta CESOFI */}
+            <Text style={styles.detailSectionTitle}>Ruta CESOFI</Text>
+
+            {loadingDetail ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="large" color="#034123" />
+              </View>
+            ) : !companyRuta?.linked ? (
+              <View style={styles.loadingBox}>
+                <Ionicons name="link-outline" size={28} color="#94A3B8" />
+                <Text style={styles.emptyText}>{companyRuta?.message || 'Esta empresa aún no vincula su Folio CESOFI.'}</Text>
+              </View>
+            ) : !companyRuta.found ? (
+              <View style={styles.loadingBox}>
+                <Ionicons name="alert-circle-outline" size={28} color="#94A3B8" />
+                <Text style={styles.emptyText}>{companyRuta.message}</Text>
+              </View>
+            ) : !companyRuta.diagnosticoIA?.planMejoraNivel ? (
+              <View style={styles.loadingBox}>
+                <Ionicons name="hourglass-outline" size={28} color="#94A3B8" />
+                <Text style={styles.emptyText}>
+                  {companyRuta.resultado
+                    ? `Nivel ${companyRuta.resultado.nivel} — plan de mejora aún en preparación.`
+                    : 'Plan de mejora aún en preparación.'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.rutaSummaryRow}>
+                  <View style={styles.rutaSummaryBox}>
+                    <Text style={styles.detailInfoLabel}>Nivel actual</Text>
+                    <Text style={styles.rutaSummaryValue}>{companyRuta.diagnosticoIA.planMejoraNivel.nivelActual}</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={16} color="#94A3B8" />
+                  <View style={styles.rutaSummaryBox}>
+                    <Text style={styles.detailInfoLabel}>Meta</Text>
+                    <Text style={[styles.rutaSummaryValue, { color: '#034123' }]}>
+                      {companyRuta.diagnosticoIA.planMejoraNivel.nivelObjetivo}
+                    </Text>
+                  </View>
+                </View>
+
+                {companyRuta.diagnosticoIA.planMejoraNivel.pasos.map((paso) => {
+                  const evidencia = evidenciaDePasoAdmin(paso.id);
+                  const status = evidencia?.status;
+                  const necesitaValidar = status === 'EN_REVISION';
+
+                  return (
+                    <View key={paso.orden} style={[styles.pasoCard, necesitaValidar && styles.pasoCardPending]}>
+                      <View style={styles.pasoCardHeaderRow}>
+                        <View style={styles.pasoOrdenBadge}>
+                          <Text style={styles.pasoOrdenBadgeText}>{paso.orden}</Text>
+                        </View>
+                        <Text style={styles.pasoTitle}>{paso.titulo}</Text>
+                      </View>
+                      <Text style={styles.pasoDescripcion}>{paso.descripcion}</Text>
+
+                      {status === 'APROBADO' ? (
+                        <View style={styles.pasoStatusRow}>
+                          <Ionicons name="checkmark-circle" size={14} color="#15803D" />
+                          <Text style={[styles.pasoStatusText, { color: '#15803D' }]}>Completado</Text>
+                        </View>
+                      ) : status === 'RECHAZADO' ? (
+                        <View style={styles.pasoStatusRow}>
+                          <Ionicons name="close-circle" size={14} color="#DC2626" />
+                          <Text style={[styles.pasoStatusText, { color: '#DC2626' }]}>Rechazado — esperando corrección</Text>
+                          {evidencia?.feedback && <Text style={styles.metaText}>"{evidencia.feedback}"</Text>}
+                        </View>
+                      ) : necesitaValidar ? (
+                        <View style={styles.pendingValidationBox}>
+                          <View style={styles.pasoStatusRow}>
+                            <Ionicons name="time" size={14} color="#D97706" />
+                            <Text style={[styles.pasoStatusText, { color: '#D97706' }]}>Esta es la que debes validar</Text>
+                          </View>
+                          <View style={styles.pendingValidationActions}>
+                            {evidencia?.fileUrl && (
+                              <TouchableOpacity
+                                style={styles.viewButton}
+                                onPress={() => Linking.openURL(evidencia.fileUrl!).catch(() => {})}
+                              >
+                                <Ionicons name="eye-outline" size={14} color="#034123" />
+                                <Text style={styles.viewButtonText}>Ver documento</Text>
+                              </TouchableOpacity>
+                            )}
+                            <View style={{ flex: 1 }} />
+                            <TouchableOpacity
+                              style={styles.validateRejectButton}
+                              onPress={() => evidencia && openDecision(evidencia, 'RECHAZADO')}
+                            >
+                              <Text style={styles.rejectButtonText}>Rechazar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.validateApproveButton}
+                              onPress={() => evidencia && openDecision(evidencia, 'APROBADO')}
+                            >
+                              <Text style={styles.approveButtonText}>Aprobar</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.pasoStatusRow}>
+                          <Ionicons name="ellipse-outline" size={14} color="#94A3B8" />
+                          <Text style={[styles.pasoStatusText, { color: '#94A3B8' }]}>Sin evidencia todavía</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </>
+            )}
+
+            <View style={{ height: 30 }} />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Modal de dictamen */}
       <Modal visible={!!selected} animationType="slide" transparent onRequestClose={() => setSelected(null)}>
@@ -796,4 +1074,84 @@ const styles = StyleSheet.create({
   confirmButton: { flex: 2, paddingVertical: 12, alignItems: 'center', borderRadius: 10, backgroundColor: '#034123' },
   confirmButtonReject: { backgroundColor: '#DC2626' },
   confirmButtonText: { fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' },
+
+  // Tarjeta de empresa: pie con llamado a la acción
+  cardFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
+  seeMoreRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  seeMoreText: { fontSize: 11, fontWeight: '700', color: '#034123' },
+
+  // Detalle de empresa (pantalla completa)
+  detailContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  detailBackButton: { padding: 2 },
+  detailHeaderTitle: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: 'bold', color: '#0F172A', marginHorizontal: 8 },
+  detailScroll: { padding: 16, paddingBottom: 40 },
+  detailInfoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  detailInfoHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
+  detailCompanyName: { flex: 1, fontSize: 17, fontWeight: 'bold', color: '#0F172A', marginRight: 8 },
+  folioBadge: { backgroundColor: '#E6F4EA', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  folioBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#034123' },
+  detailInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 14 },
+  detailInfoItem: { width: '45%' },
+  detailInfoLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 3 },
+  detailInfoValue: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
+  detailInfoSub: { fontSize: 11, color: '#64748B', marginTop: 1 },
+  detailSectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#0F172A', marginBottom: 12 },
+  rutaSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+  },
+  rutaSummaryBox: { alignItems: 'center' },
+  rutaSummaryValue: { fontSize: 22, fontWeight: 'bold', color: '#0F172A', marginTop: 2 },
+  pasoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  pasoCardPending: { borderColor: '#FBBF24', borderWidth: 1.5, backgroundColor: '#FFFBEB' },
+  pasoCardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  pasoOrdenBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#034123',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pasoOrdenBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' },
+  pasoTitle: { flex: 1, fontSize: 14, fontWeight: 'bold', color: '#0F172A' },
+  pasoDescripcion: { fontSize: 12, color: '#64748B', lineHeight: 17, marginBottom: 8 },
+  pasoStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pasoStatusText: { fontSize: 12, fontWeight: 'bold' },
+  pendingValidationBox: { gap: 10 },
+  pendingValidationActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  validateRejectButton: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5' },
+  validateApproveButton: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#034123' },
 });

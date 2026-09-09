@@ -175,15 +175,21 @@ export const createEvidence = async (
 
 // 3. [ADMIN] Listar evidencias de todas las empresas, para dictaminar (por defecto, las
 //    que están EN_REVISION — las que de verdad necesitan que alguien las revise).
+//    Con ?companyId=... se acota a una sola empresa (usado en el detalle de empresario, para
+//    cruzar cada paso de su Ruta con la evidencia que mandó).
 export const listEvidencesForAdmin = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
   try {
     const statusFiltro = typeof req.query.status === 'string' ? req.query.status : 'EN_REVISION';
+    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
 
     const evidences = await prisma.evidence.findMany({
-      where: statusFiltro === 'TODAS' ? {} : { status: statusFiltro as any },
+      where: {
+        ...(statusFiltro === 'TODAS' ? {} : { status: statusFiltro as any }),
+        ...(companyId ? { companyId } : {}),
+      },
       include: {
         company: {
           select: { id: true, name: true, folioCesofi: true, rfc: true },
