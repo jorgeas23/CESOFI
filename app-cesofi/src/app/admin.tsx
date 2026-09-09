@@ -212,9 +212,11 @@ export default function AdminScreen() {
     }
   }, []);
 
+  // Se carga siempre (no solo al entrar a "Empresarios") porque también se usa para abrir el
+  // detalle completo de una empresa desde una tarjeta de evidencia o de mensaje.
   useEffect(() => {
-    if (!checkingAccess && view === 'EMPRESARIOS') fetchCompanies();
-  }, [checkingAccess, view, fetchCompanies]);
+    if (!checkingAccess) fetchCompanies();
+  }, [checkingAccess, fetchCompanies]);
 
   // Vuelve a cargar solo la evidencia de la empresa cuyo detalle está abierto (tras dictaminar)
   const refreshCompanyEvidences = useCallback(async (companyId: string) => {
@@ -262,6 +264,28 @@ export default function AdminScreen() {
     setCompanyDetail(null);
     setCompanyRuta(null);
     setCompanyEvidences([]);
+  };
+
+  // Abrir el detalle completo de una empresa desde su nombre en una tarjeta de evidencia o
+  // mensaje — usa el directorio ya cargado; si por alguna razón aún no llegó, abre con lo poco
+  // que trae la propia evidencia/mensaje y el resto (Ruta, evidencia por paso) se completa igual.
+  const openCompanyFromRef = (ref: { id: string; name: string; folioCesofi: string | null; rfc?: string | null }) => {
+    const full = companies.find((c) => c.id === ref.id);
+    openCompanyDetail(
+      full || {
+        id: ref.id,
+        name: ref.name,
+        rfc: ref.rfc ?? null,
+        phone: null,
+        address: null,
+        folioCesofi: ref.folioCesofi,
+        points: 0,
+        level: '—',
+        createdAt: new Date().toISOString(),
+        user: { name: '—', email: '—' },
+        _count: { evidences: 0 },
+      }
+    );
   };
 
   // La evidencia más reciente de este paso (companyEvidences viene ordenado por fecha asc)
@@ -452,10 +476,13 @@ export default function AdminScreen() {
           <View style={styles.list}>
             {evidences.map((ev) => (
               <View key={ev.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.companyName}>{ev.company.name}</Text>
+                <TouchableOpacity style={styles.cardHeader} activeOpacity={0.6} onPress={() => openCompanyFromRef(ev.company)}>
+                  <View style={styles.clickableCompanyRow}>
+                    <Text style={styles.companyName}>{ev.company.name}</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#034123" />
+                  </View>
                   {ev.company.folioCesofi && <Text style={styles.folioText}>{ev.company.folioCesofi}</Text>}
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.cardBody}>
                   <View style={styles.fileIconBg}>
@@ -548,10 +575,13 @@ export default function AdminScreen() {
           <View style={styles.list}>
             {supportMessages.map((m) => (
               <View key={m.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.companyName}>{m.company.name}</Text>
+                <TouchableOpacity style={styles.cardHeader} activeOpacity={0.6} onPress={() => openCompanyFromRef(m.company)}>
+                  <View style={styles.clickableCompanyRow}>
+                    <Text style={styles.companyName}>{m.company.name}</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#034123" />
+                  </View>
                   {m.company.folioCesofi && <Text style={styles.folioText}>{m.company.folioCesofi}</Text>}
-                </View>
+                </TouchableOpacity>
 
                 <Text style={styles.docTitle}>{m.subject}</Text>
                 <Text style={styles.metaText}>{new Date(m.createdAt).toLocaleDateString()}</Text>
@@ -997,6 +1027,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   companyName: { fontSize: 14, fontWeight: 'bold', color: '#0F172A' },
+  clickableCompanyRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   folioText: { fontSize: 11, fontWeight: '600', color: '#034123' },
   cardBody: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   fileIconBg: {
